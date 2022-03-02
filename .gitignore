@@ -1,0 +1,4 @@
+.idea/**
+kvm-hello-world
+*.o
+*.img
