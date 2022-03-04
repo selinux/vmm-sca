@@ -1,4 +1,4 @@
 .idea/**
-kvm-hello-world
+sidechannel-VMM
 *.o
 *.img

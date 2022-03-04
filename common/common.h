@@ -1,0 +1,27 @@
+#ifndef __COMMON_H_
+#define __COMMON_H_
+
+
+
+#define NB_SAMPLES        (0x40)
+
+
+#define VMM_SAMPLES_ADDR  (0x10000)
+#define VM_SAMPLES_ADDR   (0x80000)
+
+
+typedef enum {
+    VICTIM,
+    ATTACKER,
+    DEFENDER,
+    NUMBEROFROLE
+} ROLE;
+
+typedef struct _vm {
+  char vm_name[256],
+  ROLE vm_role,
+
+} guest_vm;
+
+
+#endif
