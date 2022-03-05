@@ -1,4 +1,4 @@
 .idea/**
-sidechannel-VMM
+vmm/sidechannel-VMM
 *.o
 *.img

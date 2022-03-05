@@ -3,7 +3,7 @@
 
 
 
-#define NB_SAMPLES        (0x40)
+#define NB_SAMPLES        (0x10)
 
 
 #define VMM_SAMPLES_ADDR  (0x10000)
@@ -18,9 +18,8 @@ typedef enum {
 } ROLE;
 
 typedef struct _vm {
-  char vm_name[256],
-  ROLE vm_role,
-
+  char vm_name[256];
+  ROLE vm_role;
 } guest_vm;
 
 

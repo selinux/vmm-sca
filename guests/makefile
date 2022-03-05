@@ -1,12 +1,12 @@
 CFLAGS = -Wall -Wextra -Werror -fno-stack-protector -O3
 
-
+all: payload.o
 
 payload.o: payload.ld vm_alice.img.o vm_charlie.img.o vm_eve.img.o
 	$(LD) -r -T $< -o $@
 
 
-%.o: %.c
+%.o: %.c ../common/common.h
 	$(CC) $(CFLAGS) -m64 -ffreestanding -fno-pic -fno-stack-protector -c -o $@ $<
 
 %.img: %.o
@@ -18,4 +18,5 @@ payload.o: payload.ld vm_alice.img.o vm_charlie.img.o vm_eve.img.o
 
 .PHONY: clean
 clean:
-	$(RM) *.o
+	@echo remove VMs payload
+	@$(RM) *.o $(OUTPUT)

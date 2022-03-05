@@ -10,9 +10,9 @@ help:
 	@echo "clean    clean up everything"
 	@echo ""
 
-.PHONY: run
-run: vmm/sidechannel-VMM
-	$(MAKE) -C guest
+.PHONY: all
+all:
+	$(MAKE) -C guests all
 	$(MAKE) -C vmm run
 
 

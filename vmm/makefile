@@ -1,21 +1,21 @@
 OUTPUT=sidechannel-VMM
 
-run: $(OUTPUT)
-	./sidechannel-VMM -l
+run: $(OUTPUT) ../guests/payload.o
+	./$(OUTPUT) -l
 
 $(OUTPUT): $(OUTPUT).o  ../guests/payload.o ../common/common.h
 	$(CC) $^ -o $@
 
-$(OUTPUT).o: $(OUTPUT).c ../guests/payload.o
+$(OUTPUT).o: $(OUTPUT).c ../guests/payload.o  ../common/common.h
 	$(CC) $< -c
 
 ../guests/payload.o: ../common/common.h
-	$(MAKE) -C ../guests CC_DEFINES=$(CC_DEFINES) CC_FLAGS="$(CC_FLAGS)" LD_FLAGS="$(LD_FLAGS)"
+	$(MAKE) -C ../guests payload.o CC_DEFINES=$(CC_DEFINES) CC_FLAGS="$(CC_FLAGS)" LD_FLAGS="$(LD_FLAGS)"
 
 common/common.h:
 
 
 .PHONY: clean
 clean:
-	$(RM) *.o
+	$(RM) *.o $(OUTPUT)
 	$(MAKE) -C ../guests clean
