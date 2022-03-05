@@ -33,16 +33,13 @@ void
 __attribute__((noreturn))
 __attribute__((section(".start")))
 _start(void) {
-//    uint64_t test = sizeof(uint64_t);
-    uint64_t test = 0;
-    uint64_t *measures = (uint64_t *)(0x80000+test);  // offset 8 to visually verify start address (0x80000) - start with "0 - 0"
 
+    uint64_t *measures = (uint64_t *)VM_SAMPLES_ADDR;
 
-    for(int i=0; i< NB_SAMPLES;i++){
+    for(int i=0; i< NB_SAMPLES/2;i++){
         *(measures++) = __rdtsc();
 //        outb(0xE9, ' ');
     }
-
 
     print_measures();
 

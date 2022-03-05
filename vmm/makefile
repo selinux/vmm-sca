@@ -1,5 +1,5 @@
 OUTPUT=sidechannel-VMM
-CFLAGS =-g -Wall -Wextra -Werror -fno-stack-protector -O3
+CFLAGS =-g -lpthread -Wall -Wextra -Werror -fno-stack-protector -O3
 
 run: $(OUTPUT) ../guests/payload.o
 	./$(OUTPUT)
