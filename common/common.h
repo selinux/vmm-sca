@@ -18,9 +18,11 @@ typedef enum {
 } ROLE;
 
 typedef struct _vm {
-  char vm_name[256];
-  ROLE vm_role;
-} guest_vm;
+    char vm_name[256];
+    int fd;
+    char *mem;
+    ROLE vm_role;
+} vm;
 
 
 #endif

@@ -1,7 +1,8 @@
 OUTPUT=sidechannel-VMM
+CFLAGS =-g -Wall -Wextra -Werror -fno-stack-protector -O3
 
 run: $(OUTPUT) ../guests/payload.o
-	./$(OUTPUT) -l
+	./$(OUTPUT)
 
 $(OUTPUT): $(OUTPUT).o  ../guests/payload.o ../common/common.h
 	$(CC) $^ -o $@

@@ -67,45 +67,44 @@
 
 extern unsigned char measures_start[], measures_end[];
 extern const unsigned char vm_alice[], vm_alice_end[];
+extern const unsigned char vm_charlie[], vm_charlie_end[];
 extern const unsigned char vm_eve[], vm_eve_end[];
 
 
-struct vm {
-	int sys_fd;
-	int fd;
-	char *mem;
+struct vcpu {
+    int fd;
+    struct kvm_run *kvm_run;
 };
 
-void vm_init(struct vm *vm, size_t mem_size)
-{
-	int api_ver;
-	struct kvm_userspace_memory_region memreg;
+void vmm_init(int *vmm){
 
-	vm->sys_fd = open("/dev/kvm", O_RDWR);
-	if (vm->sys_fd < 0) {
+    int api_ver;
+    *vmm = open("/dev/kvm", O_RDWR);
+	if (vmm < 0) {
 		perror("open /dev/kvm");
 		exit(1);
 	}
+    api_ver = ioctl(*vmm, KVM_GET_API_VERSION, 0);
+    if (api_ver < 0) {
+        perror("KVM_GET_API_VERSION");
+        exit(1);
+    }
 
-	api_ver = ioctl(vm->sys_fd, KVM_GET_API_VERSION, 0);
-	if (api_ver < 0) {
-		perror("KVM_GET_API_VERSION");
-		exit(1);
-	}
+    if (api_ver != KVM_API_VERSION) {
+        fprintf(stderr, "Got KVM api version %d, expected %d\n",
+                api_ver, KVM_API_VERSION);
+        exit(1);
+    }
+}
 
-	if (api_ver != KVM_API_VERSION) {
-		fprintf(stderr, "Got KVM api version %d, expected %d\n",
-			api_ver, KVM_API_VERSION);
-		exit(1);
-	}
 
-	vm->fd = ioctl(vm->sys_fd, KVM_CREATE_VM, 0);
-	if (vm->fd < 0) {
-		perror("KVM_CREATE_VM");
-		exit(1);
-	}
+void vm_init(vm *vm, size_t mem_size)
+{
+	struct kvm_userspace_memory_region memreg;
 
-        if (ioctl(vm->fd, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) {
+
+
+    if (ioctl(vm->fd, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) {
                 perror("KVM_SET_TSS_ADDR");
 		exit(1);
 	}
@@ -124,30 +123,18 @@ void vm_init(struct vm *vm, size_t mem_size)
 	memreg.guest_phys_addr = 0;
 	memreg.memory_size = mem_size;
 	memreg.userspace_addr = (unsigned long)vm->mem;
-        if (ioctl(vm->fd, KVM_SET_USER_MEMORY_REGION, &memreg) < 0) {
+    if (ioctl(vm->fd, KVM_SET_USER_MEMORY_REGION, &memreg) < 0) {
 		perror("KVM_SET_USER_MEMORY_REGION");
                 exit(1);
 	}
 }
 
-struct vcpu {
-	int fd;
-	struct kvm_run *kvm_run;
-};
-
-void vcpu_init(struct vm *vm, struct vcpu *vcpu)
+void vcpu_init(vm *vm, struct vcpu *vcpu, int vcpu_mmap_size)
 {
-	int vcpu_mmap_size;
 
 	vcpu->fd = ioctl(vm->fd, KVM_CREATE_VCPU, 0);
-        if (vcpu->fd < 0) {
+    if (vcpu->fd < 0) {
 		perror("KVM_CREATE_VCPU");
-                exit(1);
-	}
-
-	vcpu_mmap_size = ioctl(vm->sys_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
-        if (vcpu_mmap_size <= 0) {
-		perror("KVM_GET_VCPU_MMAP_SIZE");
                 exit(1);
 	}
 
@@ -159,7 +146,7 @@ void vcpu_init(struct vm *vm, struct vcpu *vcpu)
 	}
 }
 
-int run_vm(struct vm *vm, struct vcpu *vcpu, size_t sz)
+int run_vm(vm *vm, struct vcpu *vcpu, size_t sz)
 {
 	struct kvm_regs regs;
 	uint64_t memval = 0;
@@ -187,7 +174,7 @@ int run_vm(struct vm *vm, struct vcpu *vcpu, size_t sz)
                 && vcpu->kvm_run->io.port == 0xBE) {
                 printf("dump measurement from VMM (direct VM memory access)\n");
 
-                unsigned long long *m = (unsigned long long *)vm->mem+VM_SAMPLES_ADDR;
+                unsigned long long *m = (unsigned long long *)vm->mem+VMM_SAMPLES_ADDR;
                 for(int i=0; i< NB_SAMPLES; i++){
                     printf("m-%04d : %llu (Δ %llu)\n", i, *m, (*m-*(m-1)));
                     m++;
@@ -248,7 +235,7 @@ static void setup_64bit_code_segment(struct kvm_sregs *sregs)
 	sregs->ds = sregs->es = sregs->fs = sregs->gs = sregs->ss = seg;
 }
 
-static void setup_long_mode(struct vm *vm, struct kvm_sregs *sregs)
+static void setup_long_mode(vm *vm, struct kvm_sregs *sregs)
 {
 	uint64_t pml4_addr = 0x2000;
 	uint64_t *pml4 = (void *)(vm->mem + pml4_addr);
@@ -303,9 +290,20 @@ int run_long_mode(struct vm *vm, struct vcpu *vcpu)
 		exit(1);
 	}
 
-	memcpy(vm->mem, vm_alice, vm_alice_end-vm_alice);
+    switch(2){
+        case VICTIM:
+        	memcpy(vm->mem, vm_alice, vm_alice_end-vm_alice);
+            break;
+        case ATTACKER:
+            memcpy(vm->mem, vm_charlie, vm_charlie_end-vm_charlie);
+            break;
+        case DEFENDER:
+            memcpy(vm->mem, vm_eve, vm_eve_end-vm_eve);
+            break;
+    }
+
     /* time sampling storage */
-    memset(vm->mem+VMM_SAMPLES_ADDR, 0, sizeof(uint64_t)*NB_SAMPLES);
+    memset(vm->mem+VM_SAMPLES_ADDR, 0, sizeof(uint64_t)*NB_SAMPLES);
 
 	return run_vm(vm, vcpu, 8);
 }
@@ -313,57 +311,31 @@ int run_long_mode(struct vm *vm, struct vcpu *vcpu)
 
 int main(int argc, char **argv)
 {
-	struct vm vm;
-	struct vcpu vcpu;
-	enum {
-		REAL_MODE,
-		PROTECTED_MODE,
-		PAGED_32BIT_MODE,
-		LONG_MODE,
-	} mode = REAL_MODE;
-	int opt;
+	int vmm;
+    vm vm[NUMBEROFROLE];
+	struct vcpu vcpu[NUMBEROFROLE];
+    int vcpu_mmap_size;
 
-	while ((opt = getopt(argc, argv, "rspl")) != -1) {
-		switch (opt) {
-		case 'r':
-			mode = REAL_MODE;
-			break;
+    vmm_init(&vmm);
+    vcpu_mmap_size = ioctl(vmm, KVM_GET_VCPU_MMAP_SIZE, 0);
+    if (vcpu_mmap_size <= 0) {
+        perror("KVM_GET_VCPU_MMAP_SIZE");
+        exit(1);
+    }
 
-		case 's':
-			mode = PROTECTED_MODE;
-			break;
+    for( int i = 0; i < NUMBEROFROLE; i++) {
+        vm[i].fd = ioctl(vmm, KVM_CREATE_VM, 0);
+        if (vm[i].fd < 0) {
+            perror("KVM_CREATE_VM");
+            exit(1);
+        }
 
-		case 'p':
-			mode = PAGED_32BIT_MODE;
-			break;
 
-		case 'l':
-			mode = LONG_MODE;
-			break;
+        vm_init((vm + i), 0x200000);
+        vcpu_init((vm + i), (vcpu + i), vcpu_mmap_size);
+    }
 
-		default:
-			fprintf(stderr, "Usage: %s [ -r | -s | -p | -l ]\n",
-				argv[0]);
-			return 1;
-		}
-	}
+    run_long_mode((vm+1), (vcpu+1));
 
-	vm_init(&vm, 0x200000);
-	vcpu_init(&vm, &vcpu);
-
-	switch (mode) {
-	case REAL_MODE:
-		return !run_long_mode(&vm, &vcpu);
-
-	case PROTECTED_MODE:
-		return !run_long_mode(&vm, &vcpu);
-
-	case PAGED_32BIT_MODE:
-		return !run_long_mode(&vm, &vcpu);
-
-	case LONG_MODE:
-		return !run_long_mode(&vm, &vcpu);
-	}
-
-	return 1;
+	return 0;
 }
