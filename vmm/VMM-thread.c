@@ -86,3 +86,19 @@ void *run_vm(void * ptr)
 
     pthread_exit((void*)&ret);
 }
+
+
+void *time_master(void * ptr)
+{
+    vm *vms = (void *)ptr;
+    int ret = 1;
+
+    printf("time master : waiting to start...\n");
+    pthread_barrier_wait (&barrier);
+    printf("time master : running...\n");
+
+    ioctl(vms[0].fd_vcpu, KVM_INTERRUPT, 20);
+    usleep(1000000);
+    ret = 0;
+    pthread_exit((void*)&ret);
+}

@@ -4,7 +4,7 @@
 
 
 #define NB_SAMPLES        (0x10)
-
+#define PAGESIZE          (0x1000)
 
 #define VMM_SAMPLES_ADDR  (0x10000)
 #define VM_SAMPLES_ADDR   (0x80000)

@@ -38,13 +38,21 @@ _start(void) {
     uint64_t *measures = (uint64_t *)VM_SAMPLES_ADDR;  // offset 8 to visually verify start address (0x80000) - start with "0 - 0"
 
 
+    for(uint64_t i=0; i< 10000000000;i++){}
+    for(uint64_t i=0; i< 10000000000;i++){}
+    for(uint64_t i=0; i< 10000000000;i++){}
+    for(uint64_t i=0; i< 10000000000;i++){}
+    for(uint64_t i=0; i< 10000000000;i++){}
+    for(uint64_t i=0; i< 10000000000;i++){}
     for(int i=0; i< NB_SAMPLES;i++){
         *(measures++) = __rdtsc();
 //        outb(0xE9, ' ');
     }
 
 
-    print_measures();
+//    while (1);
+
+//    print_measures();
 
 	*(long *) 0x400 = 42;
 

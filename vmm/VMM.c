@@ -64,6 +64,10 @@ static void setup_long_mode(vm *vm, struct kvm_sregs *sregs)
     setup_64bit_code_segment(sregs);
 }
 
+/** initialize KVM
+ *
+ * @param vmm fd
+ */
 void vmm_init(int *vmm){
 
     int api_ver;
@@ -85,6 +89,12 @@ void vmm_init(int *vmm){
     }
 }
 
+/** Initialize a VM according to his role
+ *
+ * @param vm VM fd
+ * @param mem_size
+ * @param vcpu_mmap_size
+ */
 void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
 {
 	struct kvm_userspace_memory_region memreg;
@@ -94,11 +104,21 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
     printf("%s : init 64-bit mode\n", vm->vm_name, vm->vm_role);
 
     if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) {
-                perror("KVM_SET_TSS_ADDR");
+        perror("KVM_SET_TSS_ADDR");
 		exit(1);
 	}
 
-	vm->mem = mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
+//    if(ioctl(vm->fd_vm, KVM_CREATE_IRQCHIP, 0) < 0){
+//        perror("KVM_CREATE_IRQCHIP");
+//        exit(1);
+//    }
+    struct kvm_pit_config pit = { .flags = 0 };
+    if(ioctl(vm->fd_vm, KVM_CREATE_PIT2, &pit) < 0){
+        perror("KVM_CREATE_PIT2");
+        exit(1);
+    }
+
+    vm->mem = mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
 		   MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
 	if (vm->mem == MAP_FAILED) {
 		perror("mmap mem");
@@ -131,7 +151,7 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
         exit(1);
     }
 
-    /* */
+    /* set special register */
     if (ioctl(vm->fd_vcpu, KVM_GET_SREGS, &sregs) < 0) {
 		perror("KVM_GET_SREGS");
 		exit(1);
@@ -176,6 +196,12 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
 
 }
 
+/** initialize pages to be copied into VM mem
+ *
+ * @param mem memory pointer
+ * @param size number of 4K pages
+ * @return status
+ */
 int init_pages(char** mem, const uint size){
     *mem = (char *) malloc(PAGESIZE*size);
     if (*mem == NULL) {perror("malloc error");return EXIT_FAILURE;}
@@ -189,12 +215,18 @@ int init_pages(char** mem, const uint size){
     return EXIT_SUCCESS;
 }
 
-
+/** main VMM
+ *
+ * @param argc unused
+ * @param argv unused
+ * @return status
+ */
 int main(int argc, char **argv)
 {
 	int vmm;                        // VMM fd
     vm vm[NUMBEROFROLE];            // VMs
     pthread_t tid[NUMBEROFROLE];    // VMs thread controller
+    pthread_t tm;                   // thread time master
     void * iret[NUMBEROFROLE];      // threads return satus
     int vcpu_mmap_size;             // mmap size
     int err = 0;
@@ -233,7 +265,7 @@ int main(int argc, char **argv)
      * launch VMs threads
      * */
     // create a barrier
-    pthread_barrier_init (&barrier, NULL, NUMBEROFROLE);
+    pthread_barrier_init (&barrier, NULL, NUMBEROFROLE+1);
 
     for( int i = 0; i < NUMBEROFROLE; i++) {
         vm[i].fd_vm = ioctl(vmm, KVM_CREATE_VM, 0);
@@ -251,12 +283,20 @@ int main(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
     }
+    err = pthread_create( &tm, NULL, time_master, (void*) (vm));
+    if (err != 0 ) {
+        perror("failed to launch time master thread");
+        exit(EXIT_FAILURE);
+    }
 
     /* join */
     for( int i = 0; i < NUMBEROFROLE; i++) {
         pthread_join(tid[i], &iret[i]);
         printf("VM %s - exit %d\n", vm[i].vm_name, *(int*)iret[i]);
     }
+    void *ret_tm;
+    pthread_join(tm, ret_tm);
+    printf("time master - exit %d\n", (void *)ret_tm);
 
     printf("free VMM buffers\n");
     free(page_group2);
