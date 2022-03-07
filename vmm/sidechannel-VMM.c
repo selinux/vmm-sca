@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <linux/kvm.h>
 #include <pthread.h>
+#include <sys/random.h>
 #include "../common/common.h"
 
 /* CR0 bits */
@@ -87,7 +88,7 @@ typedef struct _vm {
     pthread_t runner;
 } vm;
 
-
+pthread_barrier_t   barrier; // wait until all VMs are started
 
 static void setup_64bit_code_segment(struct kvm_sregs *sregs)
 {
@@ -248,7 +249,9 @@ void *run_vm(void * ptr)
     vm *vm = (void *)ptr;
     int ret = 1;
 
-    printf("running %s...\n\n", vm->vm_name);
+    printf("%s is waiting to start...\n", vm->vm_name);
+    pthread_barrier_wait (&barrier);
+    printf("running %s...\n", vm->vm_name);
 
 	struct kvm_regs regs;
 	uint64_t memval = 0;
@@ -313,6 +316,19 @@ void *run_vm(void * ptr)
     pthread_exit((void*)&ret);
 }
 
+int init_pages(char** mem, const uint size){
+    *mem = (char *) malloc(PAGESIZE*size);
+    if (*mem == NULL) {perror("malloc error");return EXIT_FAILURE;}
+
+    int _s = 0;
+    while(_s < PAGESIZE*size) {
+        _s += getrandom(*mem, (PAGESIZE * size) - _s, GRND_NONBLOCK);
+    }
+    printf("\nFill %d pages with random data\n", size);
+
+    return EXIT_SUCCESS;
+}
+
 
 int main(int argc, char **argv)
 {
@@ -321,6 +337,22 @@ int main(int argc, char **argv)
     pthread_t tid[NUMBEROFROLE];
     void * iret[NUMBEROFROLE];
     int vcpu_mmap_size;
+    int err = 0;
+
+    /* init VMM pages to be transferred to VMs */
+    char * page_group1 = NULL;
+    char * page_group2 = NULL;
+//    char * page_group3 = NULL;
+    err = init_pages(&page_group1, 100);
+  	if (err < 0 ) {
+		perror("failed to init buffer");
+        exit(EXIT_FAILURE);
+	}
+    err = init_pages(&page_group2, 10);
+    if (err < 0 ) {
+        perror("failed to init buffer");
+        exit(EXIT_FAILURE);
+    }
 
     vmm_init(&vmm);
     vcpu_mmap_size = ioctl(vmm, KVM_GET_VCPU_MMAP_SIZE, 0);
@@ -329,12 +361,18 @@ int main(int argc, char **argv)
         exit(1);
     }
 
+    /* pretty name VMs */
     strncpy(vm[0].vm_name, "my alice",  256);
     strncpy(vm[1].vm_name, "my charlie",  256);
     strncpy(vm[2].vm_name, "my eve",  256);
     vm[0].vm_role = VICTIM;
     vm[1].vm_role = ATTACKER;
     vm[2].vm_role = DEFENDER;
+
+    /* launch VMs threads */
+
+    // create a barrier object with a count of 3
+    pthread_barrier_init (&barrier, NULL, NUMBEROFROLE);
 
     for( int i = 0; i < NUMBEROFROLE; i++) {
         vm[i].fd_vm = ioctl(vmm, KVM_CREATE_VM, 0);
@@ -344,7 +382,11 @@ int main(int argc, char **argv)
         }
 
         vm_init((vm + i), 0x200000, vcpu_mmap_size);
-        int iret = pthread_create( &tid[i], NULL, run_vm, (void*) (vm+i));
+        err = pthread_create( &tid[i], NULL, run_vm, (void*) (vm+i));
+        if (err != 0 ) {
+            perror("failed to launch VM thread");
+            exit(EXIT_FAILURE);
+        }
     }
 
     for( int i = 0; i < NUMBEROFROLE; i++) {
@@ -352,6 +394,9 @@ int main(int argc, char **argv)
         printf("VM %s - exit %d\n", vm[i].vm_name, *(int*)iret[i]);
     }
 
+    printf("free VMM buffers\n");
+    free(page_group2);
+    free(page_group1);
 
     exit(0);
 }
