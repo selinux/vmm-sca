@@ -1,13 +1,16 @@
-OUTPUT=sidechannel-VMM
+OUTPUT=VMM
 CFLAGS =-g -lpthread -Wall -Wextra -Werror -fno-stack-protector -O3
 
 run: $(OUTPUT) ../guests/payload.o
 	./$(OUTPUT)
 
-$(OUTPUT): $(OUTPUT).o  ../guests/payload.o ../common/common.h
+$(OUTPUT): $(OUTPUT).o VMM-thread.o ../guests/payload.o ../common/common.h
 	$(CC) $^ -o $@
 
 $(OUTPUT).o: $(OUTPUT).c ../guests/payload.o  ../common/common.h
+	$(CC) $< -c
+
+VMM-thread.o: VMM-thread.c VMM-thread.h
 	$(CC) $< -c
 
 ../guests/payload.o: ../common/common.h

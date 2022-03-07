@@ -12,81 +12,9 @@
 #include <sys/random.h>
 #include "../common/common.h"
 
-/* CR0 bits */
-#define CR0_PE 1u
-#define CR0_MP (1U << 1)
-#define CR0_EM (1U << 2)
-#define CR0_TS (1U << 3)
-#define CR0_ET (1U << 4)
-#define CR0_NE (1U << 5)
-#define CR0_WP (1U << 16)
-#define CR0_AM (1U << 18)
-#define CR0_NW (1U << 29)
-#define CR0_CD (1U << 30)
-#define CR0_PG (1U << 31)
+#include "VMM.h"
+#include "VMM-thread.h"
 
-/* CR4 bits */
-#define CR4_VME 1
-#define CR4_PVI (1U << 1)
-#define CR4_TSD (1U << 2)
-#define CR4_DE (1U << 3)
-#define CR4_PSE (1U << 4)
-#define CR4_PAE (1U << 5)
-#define CR4_MCE (1U << 6)
-#define CR4_PGE (1U << 7)
-#define CR4_PCE (1U << 8)
-#define CR4_OSFXSR (1U << 8)
-#define CR4_OSXMMEXCPT (1U << 10)
-#define CR4_UMIP (1U << 11)
-#define CR4_VMXE (1U << 13)
-#define CR4_SMXE (1U << 14)
-#define CR4_FSGSBASE (1U << 16)
-#define CR4_PCIDE (1U << 17)
-#define CR4_OSXSAVE (1U << 18)
-#define CR4_SMEP (1U << 20)
-#define CR4_SMAP (1U << 21)
-
-#define EFER_SCE 1
-#define EFER_LME (1U << 8)
-#define EFER_LMA (1U << 10)
-#define EFER_NXE (1U << 11)
-
-/* 32-bit page.img directory entry bits */
-#define PDE32_PRESENT 1
-#define PDE32_RW (1U << 1)
-#define PDE32_USER (1U << 2)
-#define PDE32_PS (1U << 7)
-
-/* 64-bit page.img * entry bits */
-#define PDE64_PRESENT 1
-#define PDE64_RW (1U << 1)
-#define PDE64_USER (1U << 2)
-#define PDE64_ACCESSED (1U << 5)
-#define PDE64_DIRTY (1U << 6)
-#define PDE64_PS (1U << 7)
-#define PDE64_G (1U << 8)
-
-
-extern unsigned char measures_start[], measures_end[];
-extern const unsigned char vm_alice[], vm_alice_end[];
-extern const unsigned char vm_charlie[], vm_charlie_end[];
-extern const unsigned char vm_eve[], vm_eve_end[];
-
-
-struct vcpu {
-    int fd;
-    struct kvm_run *kvm_run;
-};
-
-typedef struct _vm {
-    char vm_name[256];
-    int fd_vm;
-    int fd_vcpu;
-    struct vcpu vcpu;
-    char *mem;
-    ROLE vm_role;
-    pthread_t runner;
-} vm;
 
 pthread_barrier_t   barrier; // wait until all VMs are started
 
@@ -163,7 +91,7 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
 	struct kvm_sregs sregs;
 	struct kvm_regs regs;
 
-    printf("init VM %s (%d) 64-bit mode\n", vm->vm_name, vm->vm_role);
+    printf("%s : init 64-bit mode\n", vm->vm_name, vm->vm_role);
 
     if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) {
                 perror("KVM_SET_TSS_ADDR");
@@ -242,78 +170,10 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
     /* time sampling storage */
     memset(vm->mem+VM_SAMPLES_ADDR, 0, sizeof(uint64_t)*NB_SAMPLES);
 
-}
+    int tsc_freq = ioctl(vm->fd_vcpu, KVM_GET_TSC_KHZ, 0);
+    printf("%s : TSC %d KHz\n", vm->vm_name, tsc_freq);
 
-void *run_vm(void * ptr)
-{
-    vm *vm = (void *)ptr;
-    int ret = 1;
 
-    printf("%s is waiting to start...\n", vm->vm_name);
-    pthread_barrier_wait (&barrier);
-    printf("running %s...\n", vm->vm_name);
-
-	struct kvm_regs regs;
-	uint64_t memval = 0;
-
-	for (;;) {
-		if (ioctl(vm->fd_vcpu, KVM_RUN, 0) < 0) {
-			perror("KVM_RUN");
-			ret = -1;
-		}
-
-        switch (vm->vcpu.kvm_run->exit_reason) {
-            case KVM_EXIT_HLT:
-                ret = 0;
-                goto check;
-
-            case KVM_EXIT_IO:
-                if (vm->vcpu.kvm_run->io.direction == KVM_EXIT_IO_OUT
-                       && vm->vcpu.kvm_run->io.port == 0xE9) {
-                    char *p = (char *)vm->vcpu.kvm_run;
-        		    fwrite(p + vm->vcpu.kvm_run->io.data_offset,
-    			      vm->vcpu.kvm_run->io.size, 1, stdout);
-	        	    fflush(stdout);
-                    continue;}
-                if (vm->vcpu.kvm_run->io.direction == KVM_EXIT_IO_OUT
-                       && vm->vcpu.kvm_run->io.port == 0xBE) {
-                    printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
-
-                    unsigned long long *m = (unsigned long long *)vm->mem+VMM_SAMPLES_ADDR;
-                    for(int i=0; i< NB_SAMPLES; i++){
-                        printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *m, (*m-*(m-1)));
-                        m++;
-                   }
-                   continue;}
-
-            /* fall through */
-            default:
-                fprintf(stderr,	"Got exit_reason %d,"
-                                   " expected KVM_EXIT_HLT (%d)\n",
-        			vm->vcpu.kvm_run->exit_reason, KVM_EXIT_HLT);
-		        ret = vm->vcpu.kvm_run->exit_reason;
-        }
-	}
-
- check:
-	if (ioctl(vm->fd_vcpu, KVM_GET_REGS, &regs) < 0) {
-		perror("KVM_GET_REGS");
-		ret = -1;
-	}
-
-	if (regs.rax != 42) {
-		printf("Wrong result: {E,R,}AX is %lld\n", regs.rax);
-		ret = -1;
-	}
-
-    memcpy(&memval, &vm->mem[0x400], sizeof(uint64_t));
-	if (memval != 42) {
-		printf("Wrong result: memory at 0x400 is %lld\n",
-		       (unsigned long long)memval);
-        ret = -1;
-	}
-
-    pthread_exit((void*)&ret);
 }
 
 int init_pages(char** mem, const uint size){
@@ -332,17 +192,16 @@ int init_pages(char** mem, const uint size){
 
 int main(int argc, char **argv)
 {
-	int vmm;
-    vm vm[NUMBEROFROLE];
-    pthread_t tid[NUMBEROFROLE];
-    void * iret[NUMBEROFROLE];
-    int vcpu_mmap_size;
+	int vmm;                        // VMM fd
+    vm vm[NUMBEROFROLE];            // VMs
+    pthread_t tid[NUMBEROFROLE];    // VMs thread controller
+    void * iret[NUMBEROFROLE];      // threads return satus
+    int vcpu_mmap_size;             // mmap size
     int err = 0;
 
     /* init VMM pages to be transferred to VMs */
     char * page_group1 = NULL;
     char * page_group2 = NULL;
-//    char * page_group3 = NULL;
     err = init_pages(&page_group1, 100);
   	if (err < 0 ) {
 		perror("failed to init buffer");
@@ -354,6 +213,7 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    /* initialize KVM common settings */
     vmm_init(&vmm);
     vcpu_mmap_size = ioctl(vmm, KVM_GET_VCPU_MMAP_SIZE, 0);
     if (vcpu_mmap_size <= 0) {
@@ -369,9 +229,10 @@ int main(int argc, char **argv)
     vm[1].vm_role = ATTACKER;
     vm[2].vm_role = DEFENDER;
 
-    /* launch VMs threads */
-
-    // create a barrier object with a count of 3
+    /*
+     * launch VMs threads
+     * */
+    // create a barrier
     pthread_barrier_init (&barrier, NULL, NUMBEROFROLE);
 
     for( int i = 0; i < NUMBEROFROLE; i++) {
@@ -381,7 +242,9 @@ int main(int argc, char **argv)
             exit(1);
         }
 
+        // init VM cpu and mem
         vm_init((vm + i), 0x200000, vcpu_mmap_size);
+        // launch VM
         err = pthread_create( &tid[i], NULL, run_vm, (void*) (vm+i));
         if (err != 0 ) {
             perror("failed to launch VM thread");
@@ -389,6 +252,7 @@ int main(int argc, char **argv)
         }
     }
 
+    /* join */
     for( int i = 0; i < NUMBEROFROLE; i++) {
         pthread_join(tid[i], &iret[i]);
         printf("VM %s - exit %d\n", vm[i].vm_name, *(int*)iret[i]);
