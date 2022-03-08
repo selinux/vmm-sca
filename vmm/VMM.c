@@ -31,6 +31,8 @@
 
 #include "VMM.h"
 #include "VMM-thread.h"
+#include "ksm.h"
+
 #include "../version.h"
 
 
@@ -260,6 +262,10 @@ int main()
     int vcpu_mmap_size;             // mmap size
     int err = 0;
 
+    if(!ksm_init()){
+        perror("KSM is not running");
+        exit(EXIT_FAILURE);
+    }
     /* init VMM pages to be transferred to VMs */
     char * page_group1 = NULL;
     char * page_group2 = NULL;

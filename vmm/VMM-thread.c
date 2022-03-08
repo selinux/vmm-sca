@@ -99,8 +99,9 @@ void *time_master(void * ptr)
     printf("time master : waiting to start...\n");
     pthread_barrier_wait (&barrier);
     printf("time master : running...\n");
-    ksm_init();
+
     printf("KSM shared pages : %d\n",ksm_shared_pages());
+
     ioctl(vms[0].fd_vcpu, KVM_INTERRUPT, 20);
     usleep(1000000);
     ret = 0;
