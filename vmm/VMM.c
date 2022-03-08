@@ -1,3 +1,20 @@
+/*
+ * =====================================================================================
+ *
+ *       Filename:  VMM.c
+ *
+ *    Description:  main executable
+ *
+ *        Version:  1.0
+ *        Created:  08/03/22 10:18:54 AM CET
+ *       Revision:  none
+ *       Compiler:  gcc
+ *
+ *         Author:  Sebastien Chassot (sinux), sebastien.chassot@etu.unige.ch
+ *        Company:  Unige - Master in Computer Science
+ *
+ * =====================================================================================
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -14,9 +31,25 @@
 
 #include "VMM.h"
 #include "VMM-thread.h"
+#include "../version.h"
 
 
 pthread_barrier_t   barrier; // wait until all VMs are started
+
+char * vm_role(ROLE r){
+    switch (r) {
+        case VICTIM:
+            return "victime";
+        case ATTACKER:
+            return "attacker";
+        case DEFENDER:
+            return "defender";
+        case NUMBEROFROLE:
+            return "";
+        default:
+            return "";
+    }
+}
 
 static void setup_64bit_code_segment(struct kvm_sregs *sregs)
 {
@@ -71,8 +104,7 @@ static void setup_long_mode(vm *vm, struct kvm_sregs *sregs)
 void vmm_init(int *vmm){
 
     int api_ver;
-    *vmm = open("/dev/kvm", O_RDWR);
-	if (vmm < 0) {
+	if ((*vmm = open("/dev/kvm", O_RDWR)) < 0) {
 		perror("open /dev/kvm");
 		exit(1);
 	}
@@ -101,7 +133,7 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
 	struct kvm_sregs sregs;
 	struct kvm_regs regs;
 
-    printf("%s : init 64-bit mode\n", vm->vm_name, vm->vm_role);
+    printf("%s (%s) : init 64-bit mode\n", vm->vm_name, vm_role(vm->vm_role));
 
     if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) {
         perror("KVM_SET_TSS_ADDR");
@@ -112,11 +144,6 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
 //        perror("KVM_CREATE_IRQCHIP");
 //        exit(1);
 //    }
-    struct kvm_pit_config pit = { .flags = 0 };
-    if(ioctl(vm->fd_vm, KVM_CREATE_PIT2, &pit) < 0){
-        perror("KVM_CREATE_PIT2");
-        exit(1);
-    }
 
     vm->mem = mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
 		   MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
@@ -185,6 +212,8 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
         case DEFENDER:
             memcpy(vm->mem, vm_eve, vm_eve_end-vm_eve);
             break;
+        case NUMBEROFROLE:
+            break;
     }
 
     /* time sampling storage */
@@ -206,7 +235,7 @@ int init_pages(char** mem, const uint size){
     *mem = (char *) malloc(PAGESIZE*size);
     if (*mem == NULL) {perror("malloc error");return EXIT_FAILURE;}
 
-    int _s = 0;
+    uint _s = 0;
     while(_s < PAGESIZE*size) {
         _s += getrandom(*mem, (PAGESIZE * size) - _s, GRND_NONBLOCK);
     }
@@ -221,7 +250,7 @@ int init_pages(char** mem, const uint size){
  * @param argv unused
  * @return status
  */
-int main(int argc, char **argv)
+int main()
 {
 	int vmm;                        // VMM fd
     vm vm[NUMBEROFROLE];            // VMs
@@ -294,9 +323,9 @@ int main(int argc, char **argv)
         pthread_join(tid[i], &iret[i]);
         printf("VM %s - exit %d\n", vm[i].vm_name, *(int*)iret[i]);
     }
-    void *ret_tm;
+    void *ret_tm = NULL;
     pthread_join(tm, ret_tm);
-    printf("time master - exit %d\n", (void *)ret_tm);
+    printf("time master - exit %ld\n", (int64_t)((void *)ret_tm));
 
     printf("free VMM buffers\n");
     free(page_group2);

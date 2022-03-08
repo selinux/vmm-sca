@@ -7,10 +7,12 @@ help:
 	@echo ""
 
 .PHONY: all
-all:
+all: update_version
 	$(MAKE) -C guests all
 	$(MAKE) -C vmm run
 
+update_version:
+	./gen_version.sh version.h
 
 .PHONY: clean
 clean:

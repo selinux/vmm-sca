@@ -4,7 +4,6 @@
 #include "VMM.h"
 
 void *run_vm(void * ptr);
-
 void *time_master(void * ptr);
 
 #endif
