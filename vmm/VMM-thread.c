@@ -1,3 +1,20 @@
+/*
+ * =====================================================================================
+ *
+ *       Filename:  VMM-threads.c
+ *
+ *    Description:  threads VM and controller
+ *
+ *        Version:  1.0
+ *        Created:  08/03/22 10:18:54 AM CET
+ *       Revision:  none
+ *       Compiler:  gcc
+ *
+ *         Author:  Sebastien Chassot (sinux), sebastien.chassot@etu.unige.ch
+ *        Company:  Unige - Master in Computer Science
+ *
+ * =====================================================================================
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -53,7 +70,7 @@ void *run_vm(void * ptr)
                        && vm->vcpu.kvm_run->io.port == 0xBE) {
                     printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
 
-                    unsigned long long *m = (unsigned long long *)vm->mem+VMM_SAMPLES_ADDR;
+                    unsigned long long *m = (unsigned long long *)vm->mem_measures;
                     for(int i=0; i< NB_SAMPLES; i++){
                         printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *m, (*m-*(m-1)));
                         m++;
@@ -80,7 +97,7 @@ void *run_vm(void * ptr)
 		ret = -1;
 	}
 
-    memcpy(&memval, &vm->mem[0x400], sizeof(uint64_t));
+    memcpy(&memval, &vm->mem_run[0x400], sizeof(uint64_t));
 	if (memval != 42) {
 		printf("Wrong result: memory at 0x400 is %lld\n",
 		       (unsigned long long)memval);
@@ -99,8 +116,10 @@ void *time_master(void * ptr)
     printf("time master : waiting to start...\n");
     pthread_barrier_wait (&barrier);
     printf("time master : running...\n");
-
-    printf("KSM shared pages : %d\n",ksm_shared_pages());
+    for(int i=0; i< 4; i++){
+        printf("KSM shared pages : %d\n",ksm_shared_pages());
+        usleep(100000);
+    }
 
     ioctl(vms[0].fd_vcpu, KVM_INTERRUPT, 20);
     usleep(1000000);

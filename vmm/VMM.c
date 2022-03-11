@@ -78,13 +78,13 @@ static void setup_64bit_code_segment(struct kvm_sregs *sregs)
 static void setup_long_mode(vm *vm, struct kvm_sregs *sregs)
 {
     uint64_t pml4_addr = 0x2000;
-    uint64_t *pml4 = (void *)(vm->mem + pml4_addr);
+    uint64_t *pml4 = (void *)(vm->mem_run + pml4_addr);
 
     uint64_t pdpt_addr = 0x3000;
-    uint64_t *pdpt = (void *)(vm->mem + pdpt_addr);
+    uint64_t *pdpt = (void *)(vm->mem_run + pdpt_addr);
 
     uint64_t pd_addr = 0x4000;
-    uint64_t *pd = (void *)(vm->mem + pd_addr);
+    uint64_t *pd = (void *)(vm->mem_run + pd_addr);
 
     pml4[0] = PDE64_PRESENT | PDE64_RW | PDE64_USER | pdpt_addr;
     pdpt[0] = PDE64_PRESENT | PDE64_RW | PDE64_USER | pd_addr;
@@ -129,11 +129,10 @@ void vmm_init(int *vmm){
  * @param mem_size
  * @param vcpu_mmap_size
  */
-void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
+void vm_init(vm* vm, int vcpu_mmap_size)
 {
-	struct kvm_userspace_memory_region memreg;
-	struct kvm_sregs sregs;
-	struct kvm_regs regs;
+//	struct kvm_userspace_memory_region mem_reg_run;
+//    struct kvm_userspace_memory_region measures_reg;
 
     printf("%s (%s) : init 64-bit mode\n", vm->vm_name, vm_role(vm->vm_role));
 
@@ -147,24 +146,92 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
 //        exit(1);
 //    }
 
-    vm->mem = mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
+    vm->mem_run = mmap(NULL, VM_MEM_RUN_SIZE, PROT_READ | PROT_WRITE,
 		   MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-	if (vm->mem == MAP_FAILED) {
-		perror("mmap mem");
+	if (vm->mem_run == MAP_FAILED) {
+		perror("mmap run region");
 		exit(1);
 	}
 
-	madvise(vm->mem, mem_size, MADV_MERGEABLE);
+    vm->mem_mmio = mmap(NULL, VM_MEM_MMIO_SIZE, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (vm->mem_mmio == MAP_FAILED) {
+        perror("mmap mmio region");
+        exit(1);
+    }
 
-	memreg.slot = 0;
-	memreg.flags = 0;
-	memreg.guest_phys_addr = 0;
-	memreg.memory_size = mem_size;
-	memreg.userspace_addr = (unsigned long)vm->mem;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &memreg) < 0) {
-		perror("KVM_SET_USER_MEMORY_REGION");
+    vm->mem_measures = mmap(NULL, VM_MEM_MEASURES_SIZE, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (vm->mem_measures == MAP_FAILED) {
+        perror("mmap measures region");
+        exit(1);
+    }
+    vm->mem_own = mmap(NULL, VM_MEM_OWNPAGES_SIZE, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (vm->mem_own == MAP_FAILED) {
+        perror("mmap mem_run");
+        exit(1);
+    }
+    vm->mem_shared = mmap(NULL, VM_MEM_SHAREDPAGES_SIZE, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (vm->mem_shared == MAP_FAILED) {
+        perror("mmap mem_run");
+        exit(1);
+    }
+    /* kernel memory regions advise */
+	madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_MERGEABLE);
+//    madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_MERGEABLE);
+
+    vm->mem_reg_run.slot = MEMRUN;
+    vm->mem_reg_run.flags = 0;
+    vm->mem_reg_run.guest_phys_addr = VM_MEM_RUN_ADDR;
+    vm->mem_reg_run.memory_size = VM_MEM_RUN_SIZE;
+    vm->mem_reg_run.userspace_addr = (unsigned long)vm->mem_run;
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_run) < 0) {
+		perror("KVM_SET_USER_MEMORY_REGION VMRUN");
                 exit(1);
 	}
+
+    vm->mem_reg_mmio.slot = MEMMMIO;
+    vm->mem_reg_mmio.flags = KVM_MEM_READONLY;             // VM_EXIT
+//    vm->mem_reg_mmio.flags = 0;
+    vm->mem_reg_mmio.guest_phys_addr = VM_MEM_MMIO_ADDR;
+    vm->mem_reg_mmio.memory_size = VM_MEM_MMIO_SIZE;
+    vm->mem_reg_mmio.userspace_addr = (unsigned long)vm->mem_mmio;
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_mmio) < 0) {
+        perror("KVM_SET_USER_MEMORY_REGION MMIO");
+        exit(1);
+    }
+
+    vm->mem_reg_measures.slot = MEMMEASURES;
+    vm->mem_reg_measures.flags = 0;
+    vm->mem_reg_measures.guest_phys_addr = VM_MEM_MEASURES_ADDR;
+    vm->mem_reg_measures.memory_size = VM_MEM_MEASURES_SIZE;
+    vm->mem_reg_measures.userspace_addr = (unsigned long)vm->mem_measures;
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_measures) < 0) {
+        perror("KVM_SET_USER_MEMORY_REGION MEASURES");
+        exit(1);
+    }
+
+    vm->mem_reg_own.slot = MEM_OWN_PAGES;
+    vm->mem_reg_own.flags = 0;
+    vm->mem_reg_own.guest_phys_addr = VM_MEM_OWNPAGES_ADDR;
+    vm->mem_reg_own.memory_size = VM_MEM_OWNPAGES_SIZE;
+    vm->mem_reg_own.userspace_addr = (unsigned long)vm->mem_own;
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_own) < 0) {
+        perror("KVM_SET_USER_MEMORY_REGION OWN PAGES");
+        exit(1);
+    }
+
+    vm->mem_reg_shared.slot = MEM_SHARED_PAGES;
+    vm->mem_reg_shared.flags = 0;
+    vm->mem_reg_shared.guest_phys_addr = VM_MEM_SHAREDPAGES_ADDR;
+    vm->mem_reg_shared.memory_size = VM_MEM_SHAREDPAGES_SIZE;
+    vm->mem_reg_shared.userspace_addr = (unsigned long)vm->mem_shared;
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_shared) < 0) {
+        perror("KVM_SET_USER_MEMORY_REGION SHARED PAGES");
+        exit(1);
+    }
 
     /* init vcpu */
     vm->fd_vcpu = ioctl(vm->fd_vm, KVM_CREATE_VCPU, 0);
@@ -181,45 +248,46 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
     }
 
     /* set special register */
-    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS, &sregs) < 0) {
+    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS, &vm->sregs) < 0) {
 		perror("KVM_GET_SREGS");
 		exit(1);
 	}
 
-    setup_long_mode(vm, &sregs);
+    setup_long_mode(vm, &vm->sregs);
 
-    if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &sregs) < 0) {
+    if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &vm->sregs) < 0) {
         perror("KVM_SET_SREGS");
         exit(1);
     }
-   	memset(&regs, 0, sizeof(regs));
+   	memset(&vm->regs, 0, sizeof(vm->regs));
 	/* Clear all FLAGS bits, except bit 1 which is always set. */
-	regs.rflags = 2;
-	regs.rip = 0;
+	vm->regs.rflags = 2;
+	vm->regs.rip = 0;
 	/* Create stack at top of 2 MB page.img and grow down. */
-	regs.rsp = 2 << 20;
+	vm->regs.rsp = STACK_ADDR;
 
-	if (ioctl(vm->fd_vcpu, KVM_SET_REGS, &regs) < 0) {
+	if (ioctl(vm->fd_vcpu, KVM_SET_REGS, &vm->regs) < 0) {
 		perror("KVM_SET_REGS");
 		exit(1);
 	}
 
     switch(vm->vm_role){
         case VICTIM:
-        	memcpy(vm->mem, vm_alice, vm_alice_end-vm_alice);
+        	memcpy(vm->mem_run, vm_alice, vm_alice_end - vm_alice);
             break;
         case ATTACKER:
-            memcpy(vm->mem, vm_charlie, vm_charlie_end-vm_charlie);
+            memcpy(vm->mem_run, vm_charlie, vm_charlie_end - vm_charlie);
             break;
         case DEFENDER:
-            memcpy(vm->mem, vm_eve, vm_eve_end-vm_eve);
+            memcpy(vm->mem_run, vm_eve, vm_eve_end - vm_eve);
             break;
         case NUMBEROFROLE:
             break;
     }
 
     /* time sampling storage */
-    memset(vm->mem+VM_SAMPLES_ADDR, 0, sizeof(uint64_t)*NB_SAMPLES);
+//    memset(vm->mem_run+VM_SAMPLES_ADDR, 0, sizeof(uint64_t)*NB_SAMPLES);
+//    memset(vm->mem_run + VM_MEM_MEASURES_ADDR, 0, sizeof(uint64_t) * NB_SAMPLES);
 
     int tsc_freq = ioctl(vm->fd_vcpu, KVM_GET_TSC_KHZ, 0);
     printf("%s : TSC %d KHz\n", vm->vm_name, tsc_freq);
@@ -227,7 +295,7 @@ void vm_init(vm* vm, size_t mem_size, int vcpu_mmap_size)
 
 }
 
-/** initialize pages to be copied into VM mem
+/** initialize pages to be copied into VM mem_run
  *
  * @param mem memory pointer
  * @param size number of 4K pages
@@ -309,8 +377,8 @@ int main()
             exit(1);
         }
 
-        // init VM cpu and mem
-        vm_init((vm + i), 0x200000, vcpu_mmap_size);
+        // init VM cpu and mem_run
+        vm_init((vm + i), vcpu_mmap_size);
         // launch VM
         err = pthread_create( &tid[i], NULL, run_vm, (void*) (vm+i));
         if (err != 0 ) {

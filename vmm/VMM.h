@@ -61,9 +61,16 @@ extern const unsigned char vm_alice[], vm_alice_end[];
 extern const unsigned char vm_charlie[], vm_charlie_end[];
 extern const unsigned char vm_eve[], vm_eve_end[];
 
+typedef enum {
+    MEMRUN,
+    MEMMMIO,
+    MEMMEASURES,
+    MEM_OWN_PAGES,
+    MEM_SHARED_PAGES,
+    NUMBEROFREGION
+} MEM_REGION;
 
 struct vcpu {
-    int fd;
     struct kvm_run *kvm_run;
 };
 
@@ -72,8 +79,22 @@ typedef struct _vm {
     int fd_vm;
     int fd_vcpu;
     struct vcpu vcpu;
-    char *mem;
+    struct kvm_sregs sregs;
+    struct kvm_regs regs;
+    char *mem_run;
+   	struct kvm_userspace_memory_region mem_reg_run;
+    char *mem_mmio;
+    struct kvm_userspace_memory_region mem_reg_mmio;
+    char *mem_measures;
+    struct kvm_userspace_memory_region mem_reg_measures;
+    char *mem_own;
+    struct kvm_userspace_memory_region mem_reg_own;
+    char *mem_shared;
+    struct kvm_userspace_memory_region mem_reg_shared;
     ROLE vm_role;
-    pthread_t runner;
 } vm;
+
+void vm_init(vm* vm, int vcpu_mmap_size);
+
+
 #endif

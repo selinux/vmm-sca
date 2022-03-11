@@ -3,12 +3,28 @@
 
 
 
-#define NB_SAMPLES        (0x10)
-#define PAGESIZE          (0x1000)
+#define PAGESIZE                (0x1000)
+#define SAMPLES2PAGES(A)        ((((A*8)/PAGESIZE)+1)*PAGESIZE)
+#define PAGES2SIZE(A)           (A*PAGESIZE)
 
-#define VMM_SAMPLES_ADDR  (0x10000)
-#define VM_SAMPLES_ADDR   (0x80000)
+#define VM_MEM_RUN_ADDR         (0x0)
+#define VM_MEM_RUN_SIZE         (0x200000)
+#define STACK_ADDR              (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE-1)
 
+#define VM_MEM_MMIO_ADDR        (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE)
+#define VM_MEM_MMIO_SIZE        (0x1000)
+
+#define NB_SAMPLES              (0x10000)
+#define VM_MEM_MEASURES_ADDR    (VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE)
+#define VM_MEM_MEASURES_SIZE    (SAMPLES2PAGES(NB_SAMPLES))
+
+#define NB_OWN_PAGES            (0x10)
+#define VM_MEM_OWNPAGES_ADDR    (VM_MEM_MEASURES_ADDR+VM_MEM_MEASURES_SIZE)
+#define VM_MEM_OWNPAGES_SIZE    (PAGES2SIZE(NB_OWN_PAGES))
+
+#define NB_SHARED_PAGES         (0x10)
+#define VM_MEM_SHAREDPAGES_ADDR (VM_MEM_OWNPAGES_ADDR+VM_MEM_OWNPAGES_SIZE)
+#define VM_MEM_SHAREDPAGES_SIZE (PAGES2SIZE(NB_SHARED_PAGES))
 
 typedef enum {
     VICTIM,

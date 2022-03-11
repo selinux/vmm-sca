@@ -1,10 +1,10 @@
 CFLAGS = -Wall -Wextra -Werror -fno-stack-protector -O3
 
 help:
-	@echo "Available targets:"
-	@echo "run      build the VMM, guest VMs and run tests"
-	@echo "clean    clean up everything"
-	@echo ""
+	@echo -e "Available targets:\n"
+	@echo -e "run\t\t\t\t build the VMM, guest VMs and run tests\n"
+	@echo -e "pages_shared\t run same VM twice to test KSM pages sharing\n"
+	@echo -e "clean\t\t\t clean up everything\n"
 
 .PHONY: all
 all: update_version
