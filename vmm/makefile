@@ -2,7 +2,7 @@ OUTPUT=VMM
 CFLAGS =-g -lpthread -Wall -Wextra -Werror -fno-stack-protector -O3
 
 run: $(OUTPUT) ../guests/payload.o
-	./$(OUTPUT)
+	@./$(OUTPUT)
 
 $(OUTPUT): $(OUTPUT).o VMM-thread.o ../guests/payload.o ../common/common.h ksm.o
 	$(CC) $^ -o $@ $(CFLAGS)

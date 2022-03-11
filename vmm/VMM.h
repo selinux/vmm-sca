@@ -76,6 +76,7 @@ struct vcpu {
 
 typedef struct _vm {
     char vm_name[256];
+    ROLE vm_role;
     int fd_vm;
     int fd_vcpu;
     struct vcpu vcpu;
@@ -91,10 +92,9 @@ typedef struct _vm {
     struct kvm_userspace_memory_region mem_reg_own;
     char *mem_shared;
     struct kvm_userspace_memory_region mem_reg_shared;
-    ROLE vm_role;
 } vm;
 
-void vm_init(vm* vm, int vcpu_mmap_size);
+void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages);
 
 
 #endif

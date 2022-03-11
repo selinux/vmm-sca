@@ -129,17 +129,12 @@ void vmm_init(int *vmm){
  * @param mem_size
  * @param vcpu_mmap_size
  */
-void vm_init(vm* vm, int vcpu_mmap_size)
+void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
 {
-//	struct kvm_userspace_memory_region mem_reg_run;
-//    struct kvm_userspace_memory_region measures_reg;
 
     printf("%s (%s) : init 64-bit mode\n", vm->vm_name, vm_role(vm->vm_role));
 
-    if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) {
-        perror("KVM_SET_TSS_ADDR");
-		exit(1);
-	}
+    if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) { perror("KVM_SET_TSS_ADDR"); exit(1);}
 
 //    if(ioctl(vm->fd_vm, KVM_CREATE_IRQCHIP, 0) < 0){
 //        perror("KVM_CREATE_IRQCHIP");
@@ -148,117 +143,85 @@ void vm_init(vm* vm, int vcpu_mmap_size)
 
     vm->mem_run = mmap(NULL, VM_MEM_RUN_SIZE, PROT_READ | PROT_WRITE,
 		   MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-	if (vm->mem_run == MAP_FAILED) {
-		perror("mmap run region");
-		exit(1);
-	}
+	if (vm->mem_run == MAP_FAILED) { perror("mmap run region"); exit(1);}
 
     vm->mem_mmio = mmap(NULL, VM_MEM_MMIO_SIZE, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_mmio == MAP_FAILED) {
-        perror("mmap mmio region");
-        exit(1);
-    }
+    if (vm->mem_mmio == MAP_FAILED) { perror("mmap mmio region"); exit(1);}
 
     vm->mem_measures = mmap(NULL, VM_MEM_MEASURES_SIZE, PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_measures == MAP_FAILED) {
-        perror("mmap measures region");
-        exit(1);
-    }
+    if (vm->mem_measures == MAP_FAILED) { perror("mmap measures region"); exit(1);}
+
     vm->mem_own = mmap(NULL, VM_MEM_OWNPAGES_SIZE, PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_own == MAP_FAILED) {
-        perror("mmap mem_run");
-        exit(1);
-    }
+    if (vm->mem_own == MAP_FAILED) { perror("mmap mem_run"); exit(1);}
+
     vm->mem_shared = mmap(NULL, VM_MEM_SHAREDPAGES_SIZE, PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_shared == MAP_FAILED) {
-        perror("mmap mem_run");
-        exit(1);
-    }
-    /* kernel memory regions advise */
-	madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_MERGEABLE);
-//    madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_MERGEABLE);
+    if (vm->mem_shared == MAP_FAILED) { perror("mmap mem_run"); exit(1);}
 
+    /* host kernel memory regions advise */
+	madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_UNMERGEABLE);
+    madvise(vm->mem_mmio, VM_MEM_MMIO_SIZE, MADV_UNMERGEABLE);
+    madvise(vm->mem_measures, VM_MEM_MEASURES_SIZE, MADV_UNMERGEABLE);
+    madvise(vm->mem_own, VM_MEM_OWNPAGES_SIZE, MADV_UNMERGEABLE);      // avoid merging
+    madvise(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE, MADV_MERGEABLE);  // advise merge
+
+    /* VM code,data,stack */
     vm->mem_reg_run.slot = MEMRUN;
     vm->mem_reg_run.flags = 0;
     vm->mem_reg_run.guest_phys_addr = VM_MEM_RUN_ADDR;
     vm->mem_reg_run.memory_size = VM_MEM_RUN_SIZE;
     vm->mem_reg_run.userspace_addr = (unsigned long)vm->mem_run;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_run) < 0) {
-		perror("KVM_SET_USER_MEMORY_REGION VMRUN");
-                exit(1);
-	}
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_run) < 0) { perror("KVM_SET_USER_MEMORY_REGION VMRUN"); exit(1);}
 
+    /* MMIO (unused yet) */
     vm->mem_reg_mmio.slot = MEMMMIO;
     vm->mem_reg_mmio.flags = KVM_MEM_READONLY;             // VM_EXIT
-//    vm->mem_reg_mmio.flags = 0;
     vm->mem_reg_mmio.guest_phys_addr = VM_MEM_MMIO_ADDR;
     vm->mem_reg_mmio.memory_size = VM_MEM_MMIO_SIZE;
     vm->mem_reg_mmio.userspace_addr = (unsigned long)vm->mem_mmio;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_mmio) < 0) {
-        perror("KVM_SET_USER_MEMORY_REGION MMIO");
-        exit(1);
-    }
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_mmio) < 0) { perror("KVM_SET_USER_MEMORY_REGION MMIO"); exit(1);}
 
+    /* time measurement region */
     vm->mem_reg_measures.slot = MEMMEASURES;
     vm->mem_reg_measures.flags = 0;
     vm->mem_reg_measures.guest_phys_addr = VM_MEM_MEASURES_ADDR;
     vm->mem_reg_measures.memory_size = VM_MEM_MEASURES_SIZE;
     vm->mem_reg_measures.userspace_addr = (unsigned long)vm->mem_measures;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_measures) < 0) {
-        perror("KVM_SET_USER_MEMORY_REGION MEASURES");
-        exit(1);
-    }
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_measures) < 0) { perror("KVM_SET_USER_MEMORY_REGION MEASURES"); exit(1);}
 
+    /* VM own pages (not shared) for read/write access tests */
     vm->mem_reg_own.slot = MEM_OWN_PAGES;
     vm->mem_reg_own.flags = 0;
     vm->mem_reg_own.guest_phys_addr = VM_MEM_OWNPAGES_ADDR;
     vm->mem_reg_own.memory_size = VM_MEM_OWNPAGES_SIZE;
     vm->mem_reg_own.userspace_addr = (unsigned long)vm->mem_own;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_own) < 0) {
-        perror("KVM_SET_USER_MEMORY_REGION OWN PAGES");
-        exit(1);
-    }
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_own) < 0) { perror("KVM_SET_USER_MEMORY_REGION OWN PAGES"); exit(1);}
 
+    /* VMs shared pages for read access, flush, COW,... tests (attacker) */
     vm->mem_reg_shared.slot = MEM_SHARED_PAGES;
     vm->mem_reg_shared.flags = 0;
     vm->mem_reg_shared.guest_phys_addr = VM_MEM_SHAREDPAGES_ADDR;
     vm->mem_reg_shared.memory_size = VM_MEM_SHAREDPAGES_SIZE;
     vm->mem_reg_shared.userspace_addr = (unsigned long)vm->mem_shared;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_shared) < 0) {
-        perror("KVM_SET_USER_MEMORY_REGION SHARED PAGES");
-        exit(1);
-    }
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_shared) < 0) { perror("KVM_SET_USER_MEMORY_REGION SHARED PAGES"); exit(1);}
 
     /* init vcpu */
     vm->fd_vcpu = ioctl(vm->fd_vm, KVM_CREATE_VCPU, 0);
-    if (vm->fd_vcpu < 0) {
-        perror("KVM_CREATE_VCPU");
-        exit(1);
-    }
+    if (vm->fd_vcpu < 0) { perror("KVM_CREATE_VCPU"); exit(1);}
 
     vm->vcpu.kvm_run = mmap(NULL, vcpu_mmap_size, PROT_READ | PROT_WRITE,
                              MAP_SHARED, vm->fd_vcpu, 0);
-    if (vm->vcpu.kvm_run == MAP_FAILED) {
-        perror("mmap kvm_run");
-        exit(1);
-    }
+    if (vm->vcpu.kvm_run == MAP_FAILED) { perror("mmap kvm_run"); exit(1); }
 
     /* set special register */
-    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS, &vm->sregs) < 0) {
-		perror("KVM_GET_SREGS");
-		exit(1);
-	}
+    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS, &vm->sregs) < 0) { perror("KVM_GET_SREGS");	exit(1);}
 
     setup_long_mode(vm, &vm->sregs);
+    if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &vm->sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
 
-    if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &vm->sregs) < 0) {
-        perror("KVM_SET_SREGS");
-        exit(1);
-    }
    	memset(&vm->regs, 0, sizeof(vm->regs));
 	/* Clear all FLAGS bits, except bit 1 which is always set. */
 	vm->regs.rflags = 2;
@@ -266,10 +229,7 @@ void vm_init(vm* vm, int vcpu_mmap_size)
 	/* Create stack at top of 2 MB page.img and grow down. */
 	vm->regs.rsp = STACK_ADDR;
 
-	if (ioctl(vm->fd_vcpu, KVM_SET_REGS, &vm->regs) < 0) {
-		perror("KVM_SET_REGS");
-		exit(1);
-	}
+	if (ioctl(vm->fd_vcpu, KVM_SET_REGS, &vm->regs) < 0) { perror("KVM_SET_REGS"); exit(1);}
 
     switch(vm->vm_role){
         case VICTIM:
@@ -286,22 +246,36 @@ void vm_init(vm* vm, int vcpu_mmap_size)
     }
 
     /* time sampling storage */
-//    memset(vm->mem_run+VM_SAMPLES_ADDR, 0, sizeof(uint64_t)*NB_SAMPLES);
-//    memset(vm->mem_run + VM_MEM_MEASURES_ADDR, 0, sizeof(uint64_t) * NB_SAMPLES);
+    memset(vm->mem_measures, 0, sizeof(uint64_t)*NB_SAMPLES);
 
+    /* own pages */
+    uint _s = 0;
+    while(_s < NB_OWN_PAGES*PAGESIZE) {
+        _s += getrandom(vm->mem_own, (NB_OWN_PAGES*PAGESIZE) - _s, GRND_NONBLOCK);
+    }
+    printf("%s (%s) : Fill %d pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
+
+    /* shared pages */
+    char *_c = vm->mem_shared;
+    for(int i = 0; i< NB_SHARED_PAGES*PAGESIZE; i++){
+        *(_c++) = shared_pages[i];
+    }
+    printf("%s (%s) : transferred %d shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
+#ifdef DEBUG
+    /* print TSC frequency from guest pov */
     int tsc_freq = ioctl(vm->fd_vcpu, KVM_GET_TSC_KHZ, 0);
     printf("%s : TSC %d KHz\n", vm->vm_name, tsc_freq);
-
+#endif
 
 }
 
-/** initialize pages to be copied into VM mem_run
+/** initialize shared pages to be copied into VM memory shared region
  *
  * @param mem memory pointer
  * @param size number of 4K pages
  * @return status
  */
-int init_pages(char** mem, const uint size){
+int init_shared_pages(char** mem, const uint size){
     *mem = (char *) malloc(PAGESIZE*size);
     if (*mem == NULL) {perror("malloc error");return EXIT_FAILURE;}
 
@@ -320,7 +294,7 @@ int init_pages(char** mem, const uint size){
  * @param argv unused
  * @return status
  */
-int main()
+int main(int argc, char ** argv)
 {
 	int vmm;                        // VMM fd
     vm vm[NUMBEROFROLE];            // VMs
@@ -330,31 +304,21 @@ int main()
     int vcpu_mmap_size;             // mmap size
     int err = 0;
 
-    if(!ksm_init()){
-        perror("KSM is not running");
-        exit(EXIT_FAILURE);
-    }
+    printf("running %s\n", argv[argc-1]);
+    printf("VMM side channel test bench : version (%s) - %s\n", __KERN_VERSION__, __BUILD_TIME__);
+
+    /* test KSM capability */
+    if(!ksm_init()){ perror("KSM is not running"); exit(EXIT_FAILURE); }
+
     /* init VMM pages to be transferred to VMs */
-    char * page_group1 = NULL;
-    char * page_group2 = NULL;
-    err = init_pages(&page_group1, 100);
-  	if (err < 0 ) {
-		perror("failed to init buffer");
-        exit(EXIT_FAILURE);
-	}
-    err = init_pages(&page_group2, 10);
-    if (err < 0 ) {
-        perror("failed to init buffer");
-        exit(EXIT_FAILURE);
-    }
+    char * shared_page_1 = NULL;
+    err = init_shared_pages(&shared_page_1, NB_SHARED_PAGES);
+    if (err < 0 ) { perror("failed to init buffer"); exit(EXIT_FAILURE);}
 
     /* initialize KVM common settings */
     vmm_init(&vmm);
     vcpu_mmap_size = ioctl(vmm, KVM_GET_VCPU_MMAP_SIZE, 0);
-    if (vcpu_mmap_size <= 0) {
-        perror("KVM_GET_VCPU_MMAP_SIZE");
-        exit(1);
-    }
+    if (vcpu_mmap_size <= 0) { perror("KVM_GET_VCPU_MMAP_SIZE"); exit(1);}
 
     /* pretty name VMs */
     strncpy(vm[0].vm_name, "my alice",  256);
@@ -364,12 +328,10 @@ int main()
     vm[1].vm_role = ATTACKER;
     vm[2].vm_role = DEFENDER;
 
-    /*
-     * launch VMs threads
-     * */
-    // create a barrier
+    /* create a barrier */
     pthread_barrier_init (&barrier, NULL, NUMBEROFROLE+1);
 
+    /* launch VMs threads */
     for( int i = 0; i < NUMBEROFROLE; i++) {
         vm[i].fd_vm = ioctl(vmm, KVM_CREATE_VM, 0);
         if (vm[i].fd_vm < 0) {
@@ -377,20 +339,16 @@ int main()
             exit(1);
         }
 
-        // init VM cpu and mem_run
-        vm_init((vm + i), vcpu_mmap_size);
-        // launch VM
+        /* init VM, vcpu, registers and memory regions */
+        vm_init((vm + i), vcpu_mmap_size, shared_page_1);
+
+        /* launch VM */
         err = pthread_create( &tid[i], NULL, run_vm, (void*) (vm+i));
-        if (err != 0 ) {
-            perror("failed to launch VM thread");
-            exit(EXIT_FAILURE);
-        }
+        if (err != 0 ) { perror("failed to launch VM thread"); exit(EXIT_FAILURE);}
+
     }
     err = pthread_create( &tm, NULL, time_master, (void*) (vm));
-    if (err != 0 ) {
-        perror("failed to launch time master thread");
-        exit(EXIT_FAILURE);
-    }
+    if (err != 0 ) { perror("failed to launch time master thread"); exit(EXIT_FAILURE);}
 
     /* join */
     for( int i = 0; i < NUMBEROFROLE; i++) {
@@ -401,9 +359,8 @@ int main()
     pthread_join(tm, ret_tm);
     printf("time master - exit %ld\n", (int64_t)((void *)ret_tm));
 
-    printf("free VMM buffers\n");
-    free(page_group2);
-    free(page_group1);
+    printf("free VMM shared pages buffers\n");
+    free(shared_page_1);
 
     exit(0);
 }
