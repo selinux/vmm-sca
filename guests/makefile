@@ -1,4 +1,4 @@
-CFLAGS = -Wall -Wextra -Werror -fno-stack-protector -O3
+CFLAGS = -Wall -Wextra -fno-stack-protector -O3
 
 all: payload.o
 

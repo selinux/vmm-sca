@@ -32,15 +32,15 @@ void
 __attribute__((noreturn))
 __attribute__((section(".start")))
 _start(void) {
-    uint64_t *measures = (uint64_t *)VM_SAMPLES_ADDR;
+//    uint64_t *measures = (uint64_t *)VM_MEM_MEASURES_ADDR;
 
 
-    for(int i=0; i< NB_SAMPLES/4;i++){
-        *(measures++) = __rdtsc();
+//    for(int i=0; i< NB_SAMPLES/4;i++){
+//        *(measures++) = __rdtsc();
 //        outb(0xE9, ' ');
-    }
+//    }
 
-    print_measures();
+//    print_measures();
 
 	*(long *) 0x400 = 42;
 

@@ -62,12 +62,12 @@ extern const unsigned char vm_charlie[], vm_charlie_end[];
 extern const unsigned char vm_eve[], vm_eve_end[];
 
 typedef enum {
-    MEMRUN,
-    MEMMMIO,
-    MEMMEASURES,
-    MEM_OWN_PAGES,
-    MEM_SHARED_PAGES,
-    NUMBEROFREGION
+    MEM_SLOT_0,
+    MEM_SLOT_1,
+    MEM_SLOT_2,
+    MEM_SLOT_3,
+    MEM_SLOT_4,
+    NUMBEROFSLOT
 } MEM_REGION;
 
 struct vcpu {
@@ -86,7 +86,7 @@ typedef struct _vm {
    	struct kvm_userspace_memory_region mem_reg_run;
     char *mem_mmio;
     struct kvm_userspace_memory_region mem_reg_mmio;
-    char *mem_measures;
+    uint64_t *mem_measures;
     struct kvm_userspace_memory_region mem_reg_measures;
     char *mem_own;
     struct kvm_userspace_memory_region mem_reg_own;

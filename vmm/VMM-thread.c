@@ -70,7 +70,7 @@ void *run_vm(void * ptr)
                        && vm->vcpu.kvm_run->io.port == 0xBE) {
                     printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
 
-                    unsigned long long *m = (unsigned long long *)vm->mem_measures;
+                    unsigned long long *m = (unsigned long long *)vm->mem_measures+1;
                     for(int i=0; i< NB_SAMPLES; i++){
                         printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *m, (*m-*(m-1)));
                         m++;
@@ -121,8 +121,10 @@ void *time_master(void * ptr)
         usleep(100000);
     }
 
-    ioctl(vms[0].fd_vcpu, KVM_INTERRUPT, 20);
-    usleep(1000000);
+    ioctl(vms[VICTIM].fd_vcpu, KVM_INTERRUPT, 20);
+    printf("%d temp useless printf\n", vms[VICTIM].fd_vcpu);
+
+//    usleep(1000000);
     ret = 0;
     pthread_exit((void*)&ret);
 }

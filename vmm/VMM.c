@@ -60,12 +60,12 @@ static void setup_64bit_code_segment(struct kvm_sregs *sregs)
             .limit = 0xffffffff,
             .selector = 1 << 3,
             .present = 1,
-            .type = 11, /* Code: execute, read, accessed */
-            .dpl = 0,
+            .type = 11,     /* Code: execute, read, accessed */
+            .dpl = 0,        /* ring 0 */
             .db = 0,
-            .s = 1, /* Code/data */
+            .s = 1,           /* Code/data */
             .l = 1,
-            .g = 1, /* 4KB granularity */
+            .g = 1,           /* 4KB granularity */
     };
 
     sregs->cs = seg;
@@ -146,20 +146,20 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
 	if (vm->mem_run == MAP_FAILED) { perror("mmap run region"); exit(1);}
 
     vm->mem_mmio = mmap(NULL, VM_MEM_MMIO_SIZE, PROT_READ | PROT_WRITE,
-                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+                       MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (vm->mem_mmio == MAP_FAILED) { perror("mmap mmio region"); exit(1);}
 
     vm->mem_measures = mmap(NULL, VM_MEM_MEASURES_SIZE, PROT_READ | PROT_WRITE,
-                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+                        MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (vm->mem_measures == MAP_FAILED) { perror("mmap measures region"); exit(1);}
 
     vm->mem_own = mmap(NULL, VM_MEM_OWNPAGES_SIZE, PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_own == MAP_FAILED) { perror("mmap mem_run"); exit(1);}
+    if (vm->mem_own == MAP_FAILED) { perror("mmap own pages region"); exit(1);}
 
     vm->mem_shared = mmap(NULL, VM_MEM_SHAREDPAGES_SIZE, PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_shared == MAP_FAILED) { perror("mmap mem_run"); exit(1);}
+    if (vm->mem_shared == MAP_FAILED) { perror("mmap shared pages region"); exit(1);}
 
     /* host kernel memory regions advise */
 	madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_UNMERGEABLE);
@@ -169,7 +169,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     madvise(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE, MADV_MERGEABLE);  // advise merge
 
     /* VM code,data,stack */
-    vm->mem_reg_run.slot = MEMRUN;
+    vm->mem_reg_run.slot = MEM_SLOT_0;
     vm->mem_reg_run.flags = 0;
     vm->mem_reg_run.guest_phys_addr = VM_MEM_RUN_ADDR;
     vm->mem_reg_run.memory_size = VM_MEM_RUN_SIZE;
@@ -177,7 +177,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_run) < 0) { perror("KVM_SET_USER_MEMORY_REGION VMRUN"); exit(1);}
 
     /* MMIO (unused yet) */
-    vm->mem_reg_mmio.slot = MEMMMIO;
+    vm->mem_reg_mmio.slot = MEM_SLOT_1;
     vm->mem_reg_mmio.flags = KVM_MEM_READONLY;             // VM_EXIT
     vm->mem_reg_mmio.guest_phys_addr = VM_MEM_MMIO_ADDR;
     vm->mem_reg_mmio.memory_size = VM_MEM_MMIO_SIZE;
@@ -185,7 +185,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_mmio) < 0) { perror("KVM_SET_USER_MEMORY_REGION MMIO"); exit(1);}
 
     /* time measurement region */
-    vm->mem_reg_measures.slot = MEMMEASURES;
+    vm->mem_reg_measures.slot = MEM_SLOT_2;
     vm->mem_reg_measures.flags = 0;
     vm->mem_reg_measures.guest_phys_addr = VM_MEM_MEASURES_ADDR;
     vm->mem_reg_measures.memory_size = VM_MEM_MEASURES_SIZE;
@@ -193,7 +193,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_measures) < 0) { perror("KVM_SET_USER_MEMORY_REGION MEASURES"); exit(1);}
 
     /* VM own pages (not shared) for read/write access tests */
-    vm->mem_reg_own.slot = MEM_OWN_PAGES;
+    vm->mem_reg_own.slot = MEM_SLOT_3;
     vm->mem_reg_own.flags = 0;
     vm->mem_reg_own.guest_phys_addr = VM_MEM_OWNPAGES_ADDR;
     vm->mem_reg_own.memory_size = VM_MEM_OWNPAGES_SIZE;
@@ -201,7 +201,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_own) < 0) { perror("KVM_SET_USER_MEMORY_REGION OWN PAGES"); exit(1);}
 
     /* VMs shared pages for read access, flush, COW,... tests (attacker) */
-    vm->mem_reg_shared.slot = MEM_SHARED_PAGES;
+    vm->mem_reg_shared.slot = MEM_SLOT_4;
     vm->mem_reg_shared.flags = 0;
     vm->mem_reg_shared.guest_phys_addr = VM_MEM_SHAREDPAGES_ADDR;
     vm->mem_reg_shared.memory_size = VM_MEM_SHAREDPAGES_SIZE;
@@ -253,7 +253,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     while(_s < NB_OWN_PAGES*PAGESIZE) {
         _s += getrandom(vm->mem_own, (NB_OWN_PAGES*PAGESIZE) - _s, GRND_NONBLOCK);
     }
-    printf("%s (%s) : Fill %d pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
+    printf("%s (%s) : fill %d pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
 
     /* shared pages */
     char *_c = vm->mem_shared;
@@ -320,6 +320,17 @@ int main(int argc, char ** argv)
     vcpu_mmap_size = ioctl(vmm, KVM_GET_VCPU_MMAP_SIZE, 0);
     if (vcpu_mmap_size <= 0) { perror("KVM_GET_VCPU_MMAP_SIZE"); exit(1);}
 
+    int nb_slot;
+    nb_slot =  ioctl(vmm, KVM_CHECK_EXTENSION, KVM_CAP_NR_MEMSLOTS);
+    if (nb_slot < 0) {
+		printf("Failed to get slot count (%s)\n", strerror(errno));
+	} else {
+        printf("Nb of memory slots available : %u\n", nb_slot);
+    }
+
+    printf("run (slot %d) : 0x%x (0x%x)\nmmio (slot %d) : 0x%x (0x%x)\nmeasures (slot %d) : 0x%x (0x%x)\nown (slot %d) : 0x%x (0x%x)\nshared (slot %d) : 0x%x (0x%x)\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_SIZE,
+           MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_SIZE, MEM_SLOT_2, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_SIZE,
+           MEM_SLOT_3, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE, MEM_SLOT_4, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE);
     /* pretty name VMs */
     strncpy(vm[0].vm_name, "my alice",  256);
     strncpy(vm[1].vm_name, "my charlie",  256);
