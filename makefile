@@ -19,5 +19,6 @@ clean:
 	$(MAKE) -C guests clean
 	$(MAKE) -C vmm clean
 
-
+enable_ksm:
+	echo 1 | sudo tee /sys/kernel/mm/ksm/run
 
