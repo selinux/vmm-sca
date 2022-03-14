@@ -114,9 +114,7 @@ void *time_master(void * ptr)
     vm *vms = (void *)ptr;
     int ret = 1;
 
-    printf("time master : waiting to start...\n");
-    pthread_barrier_wait (&barrier);
-    printf("time master : running...\n");
+    printf("time master : waiting KSM memory deduplication...\n");
 
     int i = 0;
     uint64_t wait = 10000;
@@ -129,6 +127,8 @@ void *time_master(void * ptr)
         printf("KSM : shared pages after (%.2fs) : %ld\n",(wait/1000000.)*i, nb_sp);
     }
 
+    pthread_barrier_wait (&barrier);
+    printf("time master : running...\n");
     usleep(100000);
     *(vms[ATTACKER].mem_run+0x500) = 1;   // test unlock VM victim
 
