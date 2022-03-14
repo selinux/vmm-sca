@@ -84,6 +84,6 @@ typedef enum {
 } MEM_REGION;
 
 
-void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages);
+void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages);
 
 #endif

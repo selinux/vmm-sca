@@ -28,6 +28,11 @@
 #include "VM.h"
 
 
+/** pretty print VM name
+ *
+ * @param r VM role
+ * @return VM role string
+ */
 char * vm_role(ROLE r){
     switch (r) {
         case VICTIM:
@@ -43,7 +48,49 @@ char * vm_role(ROLE r){
     }
 }
 
-static void setup_64bit_code_segment(struct kvm_sregs *sregs)
+
+/** Initialize vcpu long mode (64bits)
+ *
+ * @param vm
+ * @param sregs vcpu control registers
+ */
+static void init_long_mode(vm *vm, struct kvm_sregs *sregs)
+{
+    /* init virtual addressing tables */
+
+    /* page map level 4 */
+    uint64_t pml4_addr = 0x2000;
+    uint64_t *pml4 = (void *)(vm->mem_run + pml4_addr);
+
+    /* page directory page table */
+    uint64_t pdpt_addr = 0x3000;
+    uint64_t *pdpt = (void *)(vm->mem_run + pdpt_addr);
+
+    /* page directory table */
+    uint64_t pd_addr = 0x4000;
+    uint64_t *pd = (void *)(vm->mem_run + pd_addr);
+
+    /* link them */
+    pml4[0] = PDE64_PRESENT | PDE64_RW | pdpt_addr;
+    pdpt[0] = PDE64_PRESENT | PDE64_RW | pd_addr;
+
+    /* page entry */
+    for(uint64_t i = 0; i < 0x200; i++)
+        pd[i] = PDE64_PRESENT | PDE64_RW | PDE64_PS | (i * PAGESIZE);
+
+    /* init long mode (ref : https://en.wikipedia.org/wiki/Control_register#CR0) */
+    sregs->cr0 = CR0_PE | CR0_MP | CR0_ET | CR0_NE | CR0_WP | CR0_AM | CR0_PG;  // CR0 : flags
+    sregs->cr3 = pml4_addr;                                                     // point to page table entry
+    sregs->cr4 = CR4_PAE | CR4_OSFXSR | CR4_OSXMMEXCPT | CR4_TSD | CR4_PCE;     // TSD : If set, RDTSC instruction can only be executed when in ring 0
+    sregs->efer = EFER_LME | EFER_LMA;                                          // PCE : Performance-Monitoring Counter enable
+                                                                                // PGE : If set, address translations (PDE or PTE records) may be shared between address spaces
+}
+
+/** Initialize segmentation
+ *
+ * @param sregs vcpu control registers
+ */
+static void init_segments(struct kvm_sregs *sregs)
 {
     struct kvm_segment seg = {
             .base = 0,
@@ -65,29 +112,22 @@ static void setup_64bit_code_segment(struct kvm_sregs *sregs)
     sregs->ds = sregs->es = sregs->fs = sregs->gs = sregs->ss = seg;
 }
 
-static void setup_long_mode(vm *vm, struct kvm_sregs *sregs)
-{
-    uint64_t pml4_addr = 0x2000;
-    uint64_t *pml4 = (void *)(vm->mem_run + pml4_addr);
 
-    uint64_t pdpt_addr = 0x3000;
-    uint64_t *pdpt = (void *)(vm->mem_run + pdpt_addr);
+/** Initialize vcpu registers
+ *
+ * @param regs vcpu registers
+ */
+static void init_registers(struct kvm_regs * regs){
 
-    uint64_t pd_addr = 0x4000;
-    uint64_t *pd = (void *)(vm->mem_run + pd_addr);
-
-    pml4[0] = PDE64_PRESENT | PDE64_RW | pdpt_addr;
-    pdpt[0] = PDE64_PRESENT | PDE64_RW | pd_addr;
-    for(uint64_t i = 0; i < 0x200; i++)
-        pd[i] = PDE64_PRESENT | PDE64_RW | PDE64_PS | (i * PAGESIZE);
-
-    sregs->cr0 = CR0_PE | CR0_MP | CR0_ET | CR0_NE | CR0_WP | CR0_AM | CR0_PG;  // CR0 : https://en.wikipedia.org/wiki/Control_register#CR0
-    sregs->cr3 = pml4_addr;                                                     // page table entry
-    sregs->cr4 = CR4_PAE | CR4_OSFXSR | CR4_OSXMMEXCPT | CR4_TSD | CR4_PCE;     // TSD : If set, RDTSC instruction can only be executed when in ring 0
-    sregs->efer = EFER_LME | EFER_LMA;                                          // PCE : Performance-Monitoring Counter enable
-                                                                                // PGE : If set, address translations (PDE or PTE records) may be shared between address spaces
-    setup_64bit_code_segment(sregs);
+    /* clear all FLAGS bits, except bit 1 which is always set. */
+    memset(regs, 0, sizeof(struct kvm_regs));
+    regs->rflags = 2;
+    /* instruction pointer at bottom of run slot */
+    regs->rip = 0;
+    /* create stack at top of run slot */
+    regs->rsp = STACK_ADDR;
 }
+
 
 /** Initialize a VM according to his role
  *
@@ -95,18 +135,17 @@ static void setup_long_mode(vm *vm, struct kvm_sregs *sregs)
  * @param mem_size
  * @param vcpu_mmap_size
  */
-void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
+void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
 {
 
-    printf("%s (%s) : init 64-bit mode\n", vm->vm_name, vm_role(vm->vm_role));
-
-    if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) { perror("KVM_SET_TSS_ADDR"); exit(1);}
+//    if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) { perror("KVM_SET_TSS_ADDR"); exit(1);}
 
 //    if(ioctl(vm->fd_vm, KVM_CREATE_IRQCHIP, 0) < 0){
 //        perror("KVM_CREATE_IRQCHIP");
 //        exit(1);
 //    }
 
+    printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
     vm->mem_run = mmap(NULL, VM_MEM_RUN_SIZE, PROT_READ | PROT_WRITE,
                        MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (vm->mem_run == MAP_FAILED) { perror("mmap run region"); exit(1);}
@@ -134,6 +173,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     madvise(vm->mem_own, VM_MEM_OWNPAGES_SIZE, MADV_UNMERGEABLE);      // avoid merging
     madvise(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE, MADV_MERGEABLE);  // advise merge
 
+    printf("%s (%s) : init memory slots\n", vm->vm_name, vm_role(vm->vm_role));
     /* VM code,data,stack */
     vm->mem_reg_run.slot = MEM_SLOT_0;
     vm->mem_reg_run.flags = 0;
@@ -175,6 +215,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_shared) < 0) { perror("KVM_SET_USER_MEMORY_REGION SHARED PAGES"); exit(1);}
 
     /* init vcpu */
+    printf("%s (%s) : create vcpu\n", vm->vm_name, vm_role(vm->vm_role));
     vm->fd_vcpu = ioctl(vm->fd_vm, KVM_CREATE_VCPU, 0);
     if (vm->fd_vcpu < 0) { perror("KVM_CREATE_VCPU"); exit(1);}
 
@@ -182,21 +223,22 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
                             MAP_SHARED, vm->fd_vcpu, 0);
     if (vm->vcpu.kvm_run == MAP_FAILED) { perror("mmap kvm_run"); exit(1); }
 
-    /* set special register */
+    /* get special registers */
     if (ioctl(vm->fd_vcpu, KVM_GET_SREGS, &vm->sregs) < 0) { perror("KVM_GET_SREGS");	exit(1);}
 
-    setup_long_mode(vm, &vm->sregs);
+    /* init 64bits mode */
+    printf("%s (%s) : init vcpu long mode (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
+    init_long_mode(vm, &vm->sregs);
+    printf("%s (%s) : init segments\n", vm->vm_name, vm_role(vm->vm_role));
+    init_segments(&vm->sregs);
     if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &vm->sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
 
-    memset(&vm->regs, 0, sizeof(vm->regs));
-    /* Clear all FLAGS bits, except bit 1 which is always set. */
-    vm->regs.rflags = 2;
-    vm->regs.rip = 0;
-    /* Create stack at top of 2 MB page.img and grow down. */
-    vm->regs.rsp = STACK_ADDR;
-
+    /* init vcpu registers instruction pointer and stack pointer */
+    init_registers(&vm->regs);
+    printf("%s (%s) : init vcpu registers (rip,rsp)\n", vm->vm_name, vm_role(vm->vm_role));
     if (ioctl(vm->fd_vcpu, KVM_SET_REGS, &vm->regs) < 0) { perror("KVM_SET_REGS"); exit(1);}
 
+    /* personalize VM role */
     switch(vm->vm_role){
         case VICTIM:
             memcpy(vm->mem_run, vm_alice, vm_alice_end - vm_alice);
@@ -211,20 +253,22 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
             break;
     }
 
-    /* time sampling storage */
-    memset(vm->mem_mmio, 'A', VM_MEM_MMIO_SIZE);
-    memset(vm->mem_measures, 'B', VM_MEM_MEASURES_SIZE);
-    memset(vm->mem_own, 'C', VM_MEM_OWNPAGES_SIZE);
-    memset(vm->mem_shared, 'D', VM_MEM_SHAREDPAGES_SIZE);
+    /* init mmio and time sampling storage */
+//    memset(vm->mem_mmio, 0, VM_MEM_MMIO_SIZE);
+//    memset(vm->mem_measures, 0, VM_MEM_MEASURES_SIZE);
+    memset(vm->mem_mmio, 'A', VM_MEM_MMIO_SIZE);            // test
+    memset(vm->mem_measures, 'B', VM_MEM_MEASURES_SIZE);    // test
+//    memset(vm->mem_own, 'C', VM_MEM_OWNPAGES_SIZE);         // test
+//    memset(vm->mem_shared, 'D', VM_MEM_SHAREDPAGES_SIZE);   // test
 
-    /* own pages */
+    /* generate own pages */
     uint _s = 0;
     while(_s < NB_OWN_PAGES*PAGESIZE) {
         _s += getrandom(vm->mem_own, (NB_OWN_PAGES*PAGESIZE) - _s, GRND_NONBLOCK);
     }
     printf("%s (%s) : fill %d pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
 
-    /* shared pages */
+    /* transfer shared pages */
     char *_c = vm->mem_shared;
     for(int i = 0; i< NB_SHARED_PAGES*PAGESIZE; i++){
         *(_c++) = shared_pages[i];
