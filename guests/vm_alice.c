@@ -40,8 +40,6 @@ _start(void) {
     }
 //    print_measures();
 
-	*(long *) 0x400 = 42;
-
     for(;;)
         exit_halt();
 }

@@ -14,15 +14,15 @@ typedef struct _vm {
     struct vcpu vcpu;
     struct kvm_sregs sregs;
     struct kvm_regs regs;
-    char *mem_run;
+    void *mem_run;
    	struct kvm_userspace_memory_region mem_reg_run;
-    char *mem_mmio;
+    void *mem_mmio;
     struct kvm_userspace_memory_region mem_reg_mmio;
-    uint64_t *mem_measures;
+    void *mem_measures;
     struct kvm_userspace_memory_region mem_reg_measures;
-    char *mem_own;
+    void *mem_own;
     struct kvm_userspace_memory_region mem_reg_own;
-    char *mem_shared;
+    void *mem_shared;
     struct kvm_userspace_memory_region mem_reg_shared;
 } vm;
 

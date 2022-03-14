@@ -48,15 +48,17 @@ void *run_vm(void * ptr)
 	uint64_t memval = 0;
 
 	for (;;) {
-		if (ioctl(vm->fd_vcpu, KVM_RUN, 0) < 0) {
-			perror("KVM_RUN");
-			ret = -1;
-		}
-
+		if (ioctl(vm->fd_vcpu, KVM_RUN, 0) < 0) { perror("KVM_RUN"); ret = -1; }
+        printf("%s : exit reason %d\n", vm->vm_name, vm->vcpu.kvm_run->exit_reason);
         switch (vm->vcpu.kvm_run->exit_reason) {
             case KVM_EXIT_HLT:
                 ret = 0;
                 goto check;
+
+            case KVM_EXIT_MMIO:
+                if(vm->vcpu.kvm_run->mmio.is_write)
+                    printf("at least !!\n");
+                continue;
 
             case KVM_EXIT_IO:
                 if (vm->vcpu.kvm_run->io.direction == KVM_EXIT_IO_OUT
@@ -67,7 +69,7 @@ void *run_vm(void * ptr)
 	        	    fflush(stdout);
                     continue;}
                 if (vm->vcpu.kvm_run->io.direction == KVM_EXIT_IO_OUT
-                       && vm->vcpu.kvm_run->io.port == 0xBE) {
+                       && vm->vcpu.kvm_run->io.port == PMIO_PRINT_MEASURES) {
                     printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
 
                     long long unsigned *m = (long long unsigned *)vm->mem_run+(0x10000/8);
@@ -79,7 +81,11 @@ void *run_vm(void * ptr)
 //                        printf("%s (%04d) : %c\n", vm->vm_name, i, *m);
                         m++;
                    }
-                   continue;}
+                }
+                if(vm->vcpu.kvm_run->io.count)
+                    printf("at least !!  %u \n", vm->vcpu.kvm_run->io.count);
+
+                continue;
 
             /* fall through */
             default:
@@ -101,12 +107,12 @@ void *run_vm(void * ptr)
 		ret = -1;
 	}
 
-    memcpy(&memval, &vm->mem_run[0x400], sizeof(uint64_t));
-	if (memval != 42) {
-		printf("Wrong result: memory at 0x400 is %lld\n",
-		       (unsigned long long)memval);
+    memcpy(&memval, (void *)vm->mem_run+VM_EXIT_RETURN_CODE_ADDR, sizeof(uint64_t));
+    if (memval != VM_EXIT_RETURN_CODE) {
+        printf("Wrong result: memory at 0x400 is %lld\n",
+               (unsigned long long)memval);
         ret = -1;
-	}
+    }
 
     pthread_exit((void*)&ret);
 }
@@ -135,8 +141,9 @@ void *time_master(void * ptr)
 
     pthread_barrier_wait (&barrier);
     printf("time master : running...\n");
+
     usleep(100000);
-    *(vms[ATTACKER].mem_run+0x500) = 1;   // test unlock VM victim
+    *(uint64_t *)(vms[ATTACKER].mem_run+0x500) = 1;   // test unlock VM victim
 
 //    ioctl(vms[VICTIM].fd_vcpu, KVM_INTERRUPT, 20);
 

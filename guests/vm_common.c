@@ -1,8 +1,9 @@
+#include "../common/common.h"
 #include "vm_common.h"
 
 void exit_halt(){
-    *(long *) 0x400 = 42;
-    asm("hlt" : /* empty */ : "a" (42) : "memory");
+    *(long *) VM_EXIT_RETURN_CODE_ADDR = VM_EXIT_RETURN_CODE;
+    asm("hlt" : /* empty */ : "a" (VM_EXIT_RETURN_CODE) : "memory");
 }
 
 void exit_shutdown(){}
@@ -13,7 +14,7 @@ void outb(uint16_t port, uint8_t value) {
 
 
 void print_measures(){
-    outb(0xBE, 0);
+    outb(PMIO_PRINT_MEASURES, 0);
 }
 
 int myloop(){
