@@ -45,3 +45,17 @@ uint ksm_shared_pages(){
 
     return sp;
 }
+
+uint ksm_max_shared_pages(){
+    FILE *ksm_sp = NULL;
+    char buffer[256];
+    u_int64_t sp = 0;
+    if((ksm_sp = fopen(KSM_MAX_PSH, "r")) == NULL){ perror("KSM max sharing pages open error");}
+
+    int count = fread(&buffer, sizeof(char), 20, ksm_sp);
+
+    if(count > 0)
+        sp = atoi(buffer);
+
+    return sp;
+}

@@ -117,9 +117,10 @@ void *time_master(void * ptr)
     printf("time master : waiting KSM memory deduplication...\n");
 
     int i = 0;
-    uint64_t wait = 10000;
+    uint64_t wait = 100*NB_SHARED_PAGES;
     uint64_t nb_sp = ksm_shared_pages();
-     printf("KSM : shared pages at beginning : %ld\n", nb_sp);
+    printf("KSM : shared pages at beginning : %ld\n", nb_sp);
+    printf("KSM : max pages sharing : %d\n", ksm_max_shared_pages());
     while(nb_sp < NB_SHARED_PAGES) {
         i++;
         usleep(wait);

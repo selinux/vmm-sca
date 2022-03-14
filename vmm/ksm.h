@@ -20,6 +20,7 @@
 
 uint ksm_init();
 uint ksm_shared_pages();
+uint ksm_max_shared_pages();
 
 
 #endif
