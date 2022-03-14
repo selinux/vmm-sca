@@ -16,26 +16,12 @@
  *
  * =====================================================================================
  */
-
 #include <x86intrin.h>
 #include <stdint.h>
+
 #include "../common/common.h"
+#include "vm_common.h"
 
-
-static void outb(uint16_t port, uint8_t value) {
-	asm("outb %0,%1" : /* empty */ : "a" (value), "Nd" (port) : "memory");
-}
-static int myloop(){
-    while (1){
-//       outb(0xE9, '\165');
-        if( *(long *)0x500 == 1)
-            break;
-
-    };
-    return 0xa5;
-}
-
-void print_measures(){  outb(0xBE, 0);}
 
 void
 __attribute__((noreturn))
@@ -53,15 +39,6 @@ _start(void) {
     myloop();
 
 	*(long *) 0x400 = 42;
-
-	for (;;)
-		asm("hlt" : /* empty */ : "a" (42) : "memory");
-}
-
-/* rdtsc */
-extern __inline uint64_t
-__attribute__((__gnu_inline__, __always_inline__, __artificial__))
-__rdtsc ()
-{
-    return __builtin_ia32_rdtsc ();
+    for(;;)
+        exit_halt();
 }

@@ -9,6 +9,7 @@
 
 #define VM_MEM_RUN_ADDR         (0x0)
 #define VM_MEM_RUN_SIZE         (0x200000)
+#define STACK_OFFSET            (0x100000)
 #define STACK_ADDR              (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE-1)
 
 #define VM_MEM_MMIO_ADDR        (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE)

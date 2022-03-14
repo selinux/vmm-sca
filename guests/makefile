@@ -1,3 +1,4 @@
+CC=gcc
 CFLAGS=-ffreestanding -fno-pic -fno-stack-protector -no-pie
 WFLAGS=-Wall -Wextra
 DEBUG=-g
@@ -5,10 +6,9 @@ ARCH=-m64
 OPTS=$(CFLAGS) $(WFLAGS) $(ARCH) $(DEBUG)
 
 OUTPUT=payload.elf
-VMS=$(wildcard *.c)
+COMMON_OBJ=vm_common.o
+VMS=vm_alice.c vm_charlie.c vm_eve.c
 VMS_BIN=$(VMS:.c=.bin)
-VMS_OBJ=$(VMS:.c=.o)
-DEPS=payload.elf $(VMS_OBJ)
 
 all: payload.elf
 
@@ -18,13 +18,18 @@ payload.elf: $(VMS_BIN) ../common/common.h
 %.bin: %.o.bin
 	$(LD) -b binary -r $^ -o $@
 
-%.o.bin: %.o
-	$(LD) -T guest.ld $< -o $@
+vm_alice.o.bin: $(COMMON_OBJ)
 
-%.o: %.c ../common/common.h
+vm_charlie.o.bin: $(COMMON_OBJ)
+
+vm_eve.o.bin: $(COMMON_OBJ)
+
+%.o.bin: %.o
+	$(LD) -T guest.ld $< $(COMMON_OBJ) -o $@
+
+%.o: %.c
 	$(CC) $(OPTS) -c -o $@ $<
 
-$(VMS_OBJ): $(VMS)
 
 .PHONY: clean
 clean:
