@@ -101,35 +101,15 @@ __attribute__((noreturn))
 __attribute__((section(".start")))
 _start(void) {
 
-//    char *measures = (char *)VM_MEM_MEASURES_ADDR;
-//    *(measures++) = __rdtsc();
-//    __rdtsc();
-//    for(int i=0; i< VM_MEM_MEASURES_SIZE;i++){
+    long long unsigned *measures = (long long unsigned *)0x10000;
+//    char *measures = (char *)0x10000;
+    for(int i=0; i< NB_SAMPLES;i++){
 //        *(measures+i) = 'G';
-//    }
-//        *(measures++) = __rdtsc();
-//        outb(0xE9, ' ');
-//    }
-
-//    uint64_t mes = __rdtsc();      // this instruction work
-
-//    *(long *) (0x201008+0x70000) = 123456;   // write somewhere in memory slot 0
-//    mes = *(long *) (0x201008+0x70000);      // it works
-//    char p[256];
-//    mes = *(long *) 0x202008;      // this access don't : exit(8) + exit(17)
-
-//    itoa(mes, p, 10);
-//    uint i = 0; // printf
-//    while(p[i]){
-//        outb(0xE9, p[i]);
-//        i++;
-//    }
-//    outb(0xE9, '\n');
-
+        *(measures++) = __rdtsc();
+    }
     print_measures();
 
 	*(long *) 0x400 = 42;
-
 
 	for (;;)
 		asm("hlt" : /* empty */ : "a" (42) : "memory");

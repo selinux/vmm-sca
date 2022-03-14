@@ -43,6 +43,8 @@ uint ksm_shared_pages(){
     if(count > 0)
         sp = atoi(buffer);
 
+    // TODO : don't open and close at each call
+    fclose(ksm_sp);
     return sp;
 }
 
@@ -57,5 +59,6 @@ uint ksm_max_shared_pages(){
     if(count > 0)
         sp = atoi(buffer);
 
+    fclose(ksm_sp);
     return sp;
 }

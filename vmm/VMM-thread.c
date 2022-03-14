@@ -70,10 +70,13 @@ void *run_vm(void * ptr)
                        && vm->vcpu.kvm_run->io.port == 0xBE) {
                     printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
 
-                    char *m = (char *)vm->mem_measures;
+                    long long unsigned *m = (long long unsigned *)vm->mem_run+(0x10000/8);
+//                    char *m = (char *)vm->mem_run+0x10000;
                     for(int i=0; i< NB_SAMPLES; i++){
-//                        printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *m, (*m-*(m-1)));
-                        printf("%s (%04d) : %c\n", vm->vm_name, i, *m);
+                        unsigned long long dm = *(unsigned long long *)m-*(unsigned long long *)(m-1);
+                        printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *(unsigned long long *)m, dm);
+//                        printf("%s (%04d) : %llu\n", vm->vm_name, i, *(unsigned long long *)m);
+//                        printf("%s (%04d) : %c\n", vm->vm_name, i, *m);
                         m++;
                    }
                    continue;}
@@ -120,7 +123,9 @@ void *time_master(void * ptr)
     uint64_t wait = 100*NB_SHARED_PAGES;
     uint64_t nb_sp = ksm_shared_pages();
     printf("KSM : shared pages at beginning : %ld\n", nb_sp);
+#ifdef DEBUG
     printf("KSM : max pages sharing : %d\n", ksm_max_shared_pages());
+#endif
     while(nb_sp < NB_SHARED_PAGES) {
         i++;
         usleep(wait);
