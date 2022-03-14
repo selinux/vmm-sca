@@ -1,26 +1,37 @@
-OUTPUT=VMM
-CFLAGS =-g -lpthread -Wall -Wextra -O3
+CC=gcc
+CFLAGS =-g -lpthread -O3
+WFLAGS=-Wall -Wextra
+DEBUG=-g
+ARCH=-m64
+OPTS=$(CFLAGS) $(WFLAGS) $(ARCH) $(DEBUG)
 
-run: $(OUTPUT) ../guests/payload.o
+OUTPUT=VMM
+GUEST_DEPS=../common/common.h $(wildcard ../guests/*.c)
+
+SRC=$(wildcard *.c)
+OBJ=$(SRC:.c=.o)
+PAYLOAD=../guests/payload.elf
+COMMON=../common/common.h
+
+run: $(OUTPUT) $(PAYLOAD)
 	@./$(OUTPUT)
 
-$(OUTPUT): $(OUTPUT).o VMM-thread.o ../guests/payload.o ../common/common.h ksm.o
-	$(MAKE) -C ../guests payload.o CC_DEFINES=$(CC_DEFINES) CC_FLAGS="$(CC_FLAGS)" LD_FLAGS="$(LD_FLAGS)"
-	$(CC) $^ -o $@ $(CFLAGS)
+VMM: $(OBJ) $(PAYLOAD) $(COMMON)
+	$(MAKE) -C ../guests payload.elf
+	$(CC) $^ $(OPTS) -o $@
 
-$(OUTPUT).o: $(OUTPUT).c ../guests/payload.o  ../common/common.h
-	$(CC) $< -c $(CFLAGS)
+VM.o: VM.c VM.h $(PAYLOAD)
+	$(CC) $(OPTS) $< -c
 
-VMM-thread.o: VMM-thread.c VMM-thread.h ksm.o
-	$(CC) $< -c $(CFLAGS)
+%.o: %.c ../common/common.h
+	@$(CC) -o $@ $(OPTS) -c $<
 
-ksm.o: ksm.c ksm.h
-	$(CC) $< -c $(CFLAGS)
+$(OBJ): $(SRC)
 
-../guests/payload.o: ../common/common.h
-	$(MAKE) -C ../guests payload.o
+../guests/payload.elf: $(GUEST_DEPS)
+	$(MAKE) -C ../guests payload.elf
 
-common/common.h:
+../common/common.h:
 
 
 .PHONY: clean

@@ -1,4 +1,6 @@
 .idea/**
 vmm/VMM
 *.o
-*.img
+*.bin
+*.elf
+.gdb_history
