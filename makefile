@@ -1,4 +1,3 @@
-CFLAGS = -Wall -Wextra -Werror -fno-stack-protector -O3
 
 help:
 	@echo -e "Available targets:\n"

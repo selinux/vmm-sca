@@ -1,4 +1,4 @@
-CFLAGS = -Wall -Wextra -fno-stack-protector -O3
+CFLAGS = -Wall -Wextra -fno-stack-protector -no-pie
 
 all: payload.o
 
@@ -7,7 +7,7 @@ payload.o: payload.ld vm_alice.img.o vm_charlie.img.o vm_eve.img.o
 
 
 %.o: %.c ../common/common.h
-	$(CC) $(CFLAGS) -m64 -ffreestanding -fno-pic -fno-stack-protector -c -o $@ $<
+	$(CC) $(CFLAGS) -g -m64 -ffreestanding -fno-pic -fno-stack-protector -c -o $@ $<
 
 %.img: %.o
 	$(LD) -T guest.ld $< -o $@

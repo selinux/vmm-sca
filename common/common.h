@@ -4,7 +4,7 @@
 
 
 #define PAGESIZE                (0x1000)
-#define SAMPLES2PAGES(A)        ((((A*8)/PAGESIZE)+1)*PAGESIZE)
+#define SAMPLES2PAGES(A)        (((A+511)/512)*PAGESIZE)
 #define PAGES2SIZE(A)           (A*PAGESIZE)
 
 #define VM_MEM_RUN_ADDR         (0x0)
@@ -14,16 +14,16 @@
 #define VM_MEM_MMIO_ADDR        (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE)
 #define VM_MEM_MMIO_SIZE        (0x1000)
 
-#define NB_SAMPLES              (0x10)
+#define NB_SAMPLES              (0x200)
 #define VM_MEM_MEASURES_ADDR    (VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE)
 #define VM_MEM_MEASURES_SIZE    (SAMPLES2PAGES(NB_SAMPLES))
 //#define VM_MEM_MEASURES_SIZE    (0x2000)
 
-#define NB_OWN_PAGES            (0x20)
+#define NB_OWN_PAGES            (0x1)
 #define VM_MEM_OWNPAGES_ADDR    (VM_MEM_MEASURES_ADDR+VM_MEM_MEASURES_SIZE)
 #define VM_MEM_OWNPAGES_SIZE    (PAGES2SIZE(NB_OWN_PAGES))
 
-#define NB_SHARED_PAGES         (0x40)
+#define NB_SHARED_PAGES         (0x1)
 #define VM_MEM_SHAREDPAGES_ADDR (VM_MEM_OWNPAGES_ADDR+VM_MEM_OWNPAGES_SIZE)
 #define VM_MEM_SHAREDPAGES_SIZE (PAGES2SIZE(NB_SHARED_PAGES))
 

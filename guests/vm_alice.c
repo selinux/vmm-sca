@@ -27,6 +27,14 @@ static void outb(uint16_t port, uint8_t value) {
 	asm("outb %0,%1" : /* empty */ : "a" (value), "Nd" (port) : "memory");
 }
 
+static int loop(){
+    while (1){
+       outb(0xE9, '\165');
+
+    };
+    return 0xa5;
+}
+
 // Function to swap two numbers
 void swap(char *x, char *y) {
     char t = *x; *x = *y; *y = t;
@@ -93,38 +101,41 @@ __attribute__((noreturn))
 __attribute__((section(".start")))
 _start(void) {
 
-//    uint64_t *measures = (uint64_t *)VM_MEM_MEASURES_ADDR;
+//    char *measures = (char *)VM_MEM_MEASURES_ADDR;
 //    *(measures++) = __rdtsc();
 //    __rdtsc();
-//    for(int i=0; i< NB_SAMPLES;i++){
+//    for(int i=0; i< VM_MEM_MEASURES_SIZE;i++){
+//        *(measures+i) = 'G';
+//    }
 //        *(measures++) = __rdtsc();
 //        outb(0xE9, ' ');
 //    }
 
-    uint64_t mes = __rdtsc();      // this instruction work
+//    uint64_t mes = __rdtsc();      // this instruction work
 
-    *(long *) 0x100000 = 123456;   // write somewhere in memory slot 0
-    mes = *(long *) 0x100000;      // it works
-    char p[256];
-//    mes = *(long *) 0x200500;      // this access don't : exit(8) + exit(17)
+//    *(long *) (0x201008+0x70000) = 123456;   // write somewhere in memory slot 0
+//    mes = *(long *) (0x201008+0x70000);      // it works
+//    char p[256];
+//    mes = *(long *) 0x202008;      // this access don't : exit(8) + exit(17)
 
-    itoa(mes, p, 10);
-    uint i = 0; // printf
-    while(p[i]){
-        outb(0xE9, p[i]);
-        i++;
-    }
-    outb(0xE9, '\n');
-
-//    while (1);
+//    itoa(mes, p, 10);
+//    uint i = 0; // printf
+//    while(p[i]){
+//        outb(0xE9, p[i]);
+//        i++;
+//    }
+//    outb(0xE9, '\n');
 
     print_measures();
 
 	*(long *) 0x400 = 42;
 
+
 	for (;;)
 		asm("hlt" : /* empty */ : "a" (42) : "memory");
+    loop();
 }
+
 
 /* rdtsc */
 extern __inline uint64_t

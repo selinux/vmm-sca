@@ -70,7 +70,7 @@ static void setup_64bit_code_segment(struct kvm_sregs *sregs)
 
     sregs->cs = seg;
 
-    seg.type = 3; /* Data: read/write, accessed */
+    seg.type = 3;                /* Data: read/write, accessed */
     seg.selector = 2 << 3;
     sregs->ds = sregs->es = sregs->fs = sregs->gs = sregs->ss = seg;
 }
@@ -86,16 +86,16 @@ static void setup_long_mode(vm *vm, struct kvm_sregs *sregs)
     uint64_t pd_addr = 0x4000;
     uint64_t *pd = (void *)(vm->mem_run + pd_addr);
 
-    pml4[0] = PDE64_PRESENT | PDE64_RW | PDE64_USER | pdpt_addr;
-    pdpt[0] = PDE64_PRESENT | PDE64_RW | PDE64_USER | pd_addr;
-    pd[0] = PDE64_PRESENT | PDE64_RW | PDE64_USER | PDE64_PS;
+    pml4[0] = PDE64_PRESENT | PDE64_RW | pdpt_addr;
+    pdpt[0] = PDE64_PRESENT | PDE64_RW | pd_addr;
+    for(uint64_t i = 0; i < 0x200; i++)
+        pd[i] = PDE64_PRESENT | PDE64_RW | PDE64_PS | (i * PAGESIZE);
 
-    sregs->cr3 = pml4_addr;
-    sregs->cr4 = CR4_PAE;
-    sregs->cr0
-            = CR0_PE | CR0_MP | CR0_ET | CR0_NE | CR0_WP | CR0_AM | CR0_PG;
-    sregs->efer = EFER_LME | EFER_LMA;
-
+    sregs->cr0 = CR0_PE | CR0_MP | CR0_ET | CR0_NE | CR0_WP | CR0_AM | CR0_PG;  // CR0 : https://en.wikipedia.org/wiki/Control_register#CR0
+    sregs->cr3 = pml4_addr;                                                     // page table entry
+    sregs->cr4 = CR4_PAE | CR4_OSFXSR | CR4_OSXMMEXCPT | CR4_TSD | CR4_PCE;     // TSD : If set, RDTSC instruction can only be executed when in ring 0
+    sregs->efer = EFER_LME | EFER_LMA;                                          // PCE : Performance-Monitoring Counter enable
+                                                                                // PGE : If set, address translations (PDE or PTE records) may be shared between address spaces
     setup_64bit_code_segment(sregs);
 }
 
@@ -142,7 +142,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
 //    }
 
     vm->mem_run = mmap(NULL, VM_MEM_RUN_SIZE, PROT_READ | PROT_WRITE,
-		   MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+		   MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
 	if (vm->mem_run == MAP_FAILED) { perror("mmap run region"); exit(1);}
 
     vm->mem_mmio = mmap(NULL, VM_MEM_MMIO_SIZE, PROT_READ | PROT_WRITE,
@@ -154,7 +154,7 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     if (vm->mem_measures == MAP_FAILED) { perror("mmap measures region"); exit(1);}
 
     vm->mem_own = mmap(NULL, VM_MEM_OWNPAGES_SIZE, PROT_READ | PROT_WRITE,
-                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+                        MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (vm->mem_own == MAP_FAILED) { perror("mmap own pages region"); exit(1);}
 
     vm->mem_shared = mmap(NULL, VM_MEM_SHAREDPAGES_SIZE, PROT_READ | PROT_WRITE,
@@ -246,21 +246,24 @@ void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages)
     }
 
     /* time sampling storage */
-    memset(vm->mem_measures, 0, sizeof(uint64_t)*NB_SAMPLES);
+    memset(vm->mem_mmio, 'A', VM_MEM_MMIO_SIZE);
+    memset(vm->mem_measures, 'B', VM_MEM_MEASURES_SIZE);
+    memset(vm->mem_own, 'C', VM_MEM_OWNPAGES_SIZE);
+    memset(vm->mem_shared, 'D', VM_MEM_SHAREDPAGES_SIZE);
 
     /* own pages */
-    uint _s = 0;
-    while(_s < NB_OWN_PAGES*PAGESIZE) {
-        _s += getrandom(vm->mem_own, (NB_OWN_PAGES*PAGESIZE) - _s, GRND_NONBLOCK);
-    }
-    printf("%s (%s) : fill %d pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
+//    uint _s = 0;
+//    while(_s < NB_OWN_PAGES*PAGESIZE) {
+//        _s += getrandom(vm->mem_own, (NB_OWN_PAGES*PAGESIZE) - _s, GRND_NONBLOCK);
+//    }
+//    printf("%s (%s) : fill %d pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
 
     /* shared pages */
-    char *_c = vm->mem_shared;
-    for(int i = 0; i< NB_SHARED_PAGES*PAGESIZE; i++){
-        *(_c++) = shared_pages[i];
-    }
-    printf("%s (%s) : transferred %d shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
+//    char *_c = vm->mem_shared;
+//    for(int i = 0; i< NB_SHARED_PAGES*PAGESIZE; i++){
+//        *(_c++) = shared_pages[i];
+//    }
+//    printf("%s (%s) : transferred %d shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
 #ifdef DEBUG
     /* print TSC frequency from guest pov */
     int tsc_freq = ioctl(vm->fd_vcpu, KVM_GET_TSC_KHZ, 0);
@@ -308,7 +311,7 @@ int main(int argc, char ** argv)
     printf("VMM side channel test bench : version (%s) - %s\n", __KERN_VERSION__, __BUILD_TIME__);
 
     /* test KSM capability */
-    if(!ksm_init()){ perror("KSM is not running"); exit(EXIT_FAILURE); }
+    if(!ksm_init()){ perror("KSM is not running - please run make enable_ksm manually to enable it"); exit(EXIT_FAILURE); }
 
     /* init VMM pages to be transferred to VMs */
     char * shared_page_1 = NULL;

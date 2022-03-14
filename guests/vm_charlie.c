@@ -25,7 +25,15 @@
 static void outb(uint16_t port, uint8_t value) {
 	asm("outb %0,%1" : /* empty */ : "a" (value), "Nd" (port) : "memory");
 }
+static int myloop(){
+    while (1){
+//       outb(0xE9, '\165');
+        if( *(long *)0x500 == 1)
+            break;
 
+    };
+    return 0xa5;
+}
 
 void print_measures(){  outb(0xBE, 0);}
 
@@ -42,6 +50,7 @@ _start(void) {
 //    }
 
 //    print_measures();
+    myloop();
 
 	*(long *) 0x400 = 42;
 
