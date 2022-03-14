@@ -72,6 +72,7 @@ void vmm_init(int *vmm){
  * @return status
  */
 int init_shared_pages(char** mem, const uint size){
+
     *mem = (char *) malloc(PAGESIZE*size);
     if (*mem == NULL) {perror("malloc error");return EXIT_FAILURE;}
 
@@ -79,7 +80,6 @@ int init_shared_pages(char** mem, const uint size){
     while(_s < PAGESIZE*size) {
         _s += getrandom(*mem, (PAGESIZE * size) - _s, GRND_NONBLOCK);
     }
-    printf("\nFill %d pages with random data\n", size);
 
     return EXIT_SUCCESS;
 }
@@ -98,39 +98,46 @@ int main(int argc, char ** argv)
     pthread_t tm;                   // thread time master
     void * iret[NUMBEROFROLE];      // threads return satus
     int vcpu_mmap_size;             // mmap size
-    int err = 0;
+    int err;
 
-    printf("running %s\n", argv[argc-1]);
+    printf("running %s\n", argv[argc-argc]);
+    printf("----------------------------------------------------------------------------------------\n");
     printf("VMM side channel test bench : version (%s) - %s\n", __KERN_VERSION__, __BUILD_TIME__);
+    printf("----------------------------------------------------------------------------------------\n\n");
 
     /* test KSM capability */
-    if(!ksm_init()){ perror("KSM is not running - please run make enable_ksm manually to enable it"); exit(EXIT_FAILURE); }
+    if(!ksm_init()){ perror("KSM is not enabled (required) - please run make enable_ksm manually to enable it"); exit(EXIT_FAILURE); }
 
     /* init VMM pages to be transferred to VMs */
+    printf("VMM : filled %d pages with random data to be shared between VMs\n", NB_SHARED_PAGES);
     char * shared_page_1 = NULL;
     err = init_shared_pages(&shared_page_1, NB_SHARED_PAGES);
     if (err < 0 ) { perror("failed to init buffer"); exit(EXIT_FAILURE);}
 
     /* initialize KVM common settings */
+    printf("VMM : initialize KVM\n");
     vmm_init(&vmm);
-    vcpu_mmap_size = ioctl(vmm, KVM_GET_VCPU_MMAP_SIZE, 0);
+    vcpu_mmap_size = ioctl(vmm, KVM_GET_VCPU_MMAP_SIZE, 0);          // const and used by all VM
     if (vcpu_mmap_size <= 0) { perror("KVM_GET_VCPU_MMAP_SIZE"); exit(1);}
 
+#ifdef DEBUG
     int nb_slot;
     nb_slot =  ioctl(vmm, KVM_CHECK_EXTENSION, KVM_CAP_NR_MEMSLOTS);
-    if (nb_slot < 0) {
-		printf("Failed to get slot count (%s)\n", strerror(errno));
-	} else {
-        printf("Nb of memory slots available : %u\n", nb_slot);
-    }
-
+//    if (nb_slot < 0) {
+//		printf("failed to get slot count (%s)\n", strerror(errno));
+//	} else {
+//        printf("bb of memory slots available : %u\n", nb_slot);
+//    }
     printf("run (slot %d) : 0x%x (0x%x)\nmmio (slot %d) : 0x%x (0x%x)\nmeasures (slot %d) : 0x%x (0x%x)\nown (slot %d) : 0x%x (0x%x)\nshared (slot %d) : 0x%x (0x%x)\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_SIZE,
            MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_SIZE, MEM_SLOT_2, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_SIZE,
            MEM_SLOT_3, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE, MEM_SLOT_4, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE);
+#endif
+
+    printf("VMM : initialize %d VMs and launch VMs thread\n\n", NUMBEROFROLE);
     /* pretty name VMs */
-    strncpy(vm[0].vm_name, "my alice",  256);
-    strncpy(vm[1].vm_name, "my charlie",  256);
-    strncpy(vm[2].vm_name, "my eve",  256);
+    strncpy(vm[0].vm_name, "VM alice",  256);
+    strncpy(vm[1].vm_name, "VM charlie",  256);
+    strncpy(vm[2].vm_name, "VM eve",  256);
     vm[0].vm_role = VICTIM;
     vm[1].vm_role = ATTACKER;
     vm[2].vm_role = DEFENDER;
@@ -160,13 +167,13 @@ int main(int argc, char ** argv)
     /* join */
     for( int i = 0; i < NUMBEROFROLE; i++) {
         pthread_join(tid[i], &iret[i]);
-        printf("VM %s - exit %d\n", vm[i].vm_name, *(int*)iret[i]);
+        printf("%s : exit %d\n", vm[i].vm_name, *(int*)iret[i]);
     }
     void *ret_tm = NULL;
     pthread_join(tm, ret_tm);
-    printf("time master - exit %ld\n", (int64_t)((void *)ret_tm));
+    printf("time master : exit %ld\n", (int64_t)((void *)ret_tm));
 
-    printf("free VMM shared pages buffers\n");
+    printf("VMM : free shared pages buffers\n");
     free(shared_page_1);
 
     exit(0);

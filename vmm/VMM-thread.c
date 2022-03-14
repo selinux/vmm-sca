@@ -71,10 +71,10 @@ void *run_vm(void * ptr)
                     printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
 
                     char *m = (char *)vm->mem_measures;
-                    for(int i=0; i< VM_MEM_MEASURES_SIZE; i++){
+                    for(int i=0; i< NB_SAMPLES; i++){
 //                        printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *m, (*m-*(m-1)));
-                        printf("%s (%04d) : %c\n", vm->vm_name, i, *(m+i));
-//                        m++;
+                        printf("%s (%04d) : %c\n", vm->vm_name, i, *m);
+                        m++;
                    }
                    continue;}
 
@@ -117,18 +117,23 @@ void *time_master(void * ptr)
     printf("time master : waiting to start...\n");
     pthread_barrier_wait (&barrier);
     printf("time master : running...\n");
-//    for(int i=0; i< 4; i++){
-//        printf("KSM shared pages : %d\n",ksm_shared_pages());
-//        usleep(100000);
-//    }
 
-    usleep(2000000); // 2s
-    *(vms[ATTACKER].mem_run+0x500) = 1;
+    int i = 0;
+    uint64_t wait = 10000;
+    uint64_t nb_sp = ksm_shared_pages();
+     printf("KSM : shared pages at beginning : %ld\n", nb_sp);
+    while(nb_sp < NB_SHARED_PAGES) {
+        i++;
+        usleep(wait);
+        nb_sp = ksm_shared_pages();
+        printf("KSM : shared pages after (%.2fs) : %ld\n",(wait/1000000.)*i, nb_sp);
+    }
+
+    usleep(100000);
+    *(vms[ATTACKER].mem_run+0x500) = 1;   // test unlock VM victim
 
 //    ioctl(vms[VICTIM].fd_vcpu, KVM_INTERRUPT, 20);
-    printf("%d temp useless printf\n", vms[VICTIM].fd_vcpu);
 
-//    usleep(1000000);
     ret = 0;
     pthread_exit((void*)&ret);
 }

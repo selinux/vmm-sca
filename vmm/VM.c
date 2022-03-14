@@ -229,7 +229,7 @@ void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
     /* init 64bits mode */
     printf("%s (%s) : init vcpu long mode (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
     init_long_mode(vm, &vm->sregs);
-    printf("%s (%s) : init segments\n", vm->vm_name, vm_role(vm->vm_role));
+    printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
     init_segments(&vm->sregs);
     if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &vm->sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
 

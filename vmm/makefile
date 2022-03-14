@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS =-g -lpthread -O3
-WFLAGS=-Wall -Wextra
+WFLAGS=-Wall -Wextra -Werror
 DEBUG=-g
 ARCH=-m64
 OPTS=$(CFLAGS) $(WFLAGS) $(ARCH) $(DEBUG)
