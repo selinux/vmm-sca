@@ -108,17 +108,17 @@ int main(int argc, char ** argv)
     /* test KSM capability */
     if(!ksm_init()){ perror("KSM is not enabled (required) - please run make enable_ksm manually to enable it"); exit(EXIT_FAILURE); }
 
-    /* init VMM pages to be transferred to VMs */
-    printf("VMM : filled %d pages with random data to be shared between VMs\n", NB_SHARED_PAGES);
-    char * shared_page_1 = NULL;
-    err = init_shared_pages(&shared_page_1, NB_SHARED_PAGES);
-    if (err < 0 ) { perror("failed to init buffer"); exit(EXIT_FAILURE);}
-
     /* initialize KVM common settings */
     printf("VMM : initialize KVM\n");
     vmm_init(&vmm);
     vcpu_mmap_size = ioctl(vmm, KVM_GET_VCPU_MMAP_SIZE, 0);          // const and used by all VM
     if (vcpu_mmap_size <= 0) { perror("KVM_GET_VCPU_MMAP_SIZE"); exit(1);}
+
+    /* init VMM pages to be transferred to VMs */
+    printf("VMM : filled %d pages with random data to be shared between VMs\n", NB_SHARED_PAGES);
+    char * shared_page_1 = NULL;
+    err = init_shared_pages(&shared_page_1, NB_SHARED_PAGES);
+    if (err < 0 ) { perror("failed to init buffer"); exit(EXIT_FAILURE);}
 
 #ifdef DEBUG
     int nb_slot;
