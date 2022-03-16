@@ -28,27 +28,6 @@
 #include "VM.h"
 
 
-/** pretty print VM name
- *
- * @param r VM role
- * @return VM role string
- */
-char * vm_role(ROLE r){
-    switch (r) {
-        case VICTIM:
-            return "victime";
-        case ATTACKER:
-            return "attacker";
-        case DEFENDER:
-            return "defender";
-        case NUMBEROFROLE:
-            return "";
-        default:
-            return "";
-    }
-}
-
-
 /** Initialize vcpu long mode (64bits)
  *
  * @param vm
@@ -139,11 +118,29 @@ void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
 {
 
 //    if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) { perror("KVM_SET_TSS_ADDR"); exit(1);}
+//    if(ioctl(vm->fd_vm, KVM_CREATE_IRQCHIP, 0) < 0){ perror("KVM_CREATE_IRQCHIP"); exit(1);}
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-irq-line
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-create-pit2
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-irqfd            Allows setting an eventfd to directly trigger a guest interrupt.
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-create-device    Creates an emulated device in the kernel.
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-get-vcpu-events
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-enable-cap
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-set-identity-map-addr  This ioctl is required on Intel-based hosts.
+//                                                                                        This ioctl defines the physical address of a one-page region in the guest physical address space.
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-set-gsi-routing  Sets the GSI routing table entries, overwriting any previously set entries.
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-get-sregs2       Reads special registers from the vcpu. This ioctl (when supported) replaces the KVM_GET_SREGS.
 
-//    if(ioctl(vm->fd_vm, KVM_CREATE_IRQCHIP, 0) < 0){
-//        perror("KVM_CREATE_IRQCHIP");
-//        exit(1);
-//    }
+
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-get-clock
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-set-clock
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-set-tsc-khz      Specifies the tsc frequency for the virtual machine. The unit of the frequency is KHz.
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-dirty-tlb        This must be called whenever userspace has changed an entry in the shared TLB, prior to calling KVM_RUN on the associated vcpu.
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-kvmclock-ctrl    This ioctl sets a flag accessible to the guest indicating that the specified vCPU has been paused by the host userspace.
+
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#capabilities-that-can-be-enabled-on-vcpus
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-cap-sw-tlb       Configures the virtual CPU’s TLB array, establishing a shared memory area between userspace and KVM.
+
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#capabilities-that-can-be-enabled-on-vms
 
     printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
     vm->mem_run = mmap(NULL, VM_MEM_RUN_SIZE, PROT_READ | PROT_WRITE,
@@ -261,6 +258,17 @@ void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
 //    memset(vm->mem_own, 'C', VM_MEM_OWNPAGES_SIZE);         // test
 //    memset(vm->mem_shared, 'D', VM_MEM_SHAREDPAGES_SIZE);   // test
 
+#ifdef DEBUG
+    translate_vm_addr(vm, (long long unsigned int) VM_MEM_MMIO_ADDR);
+    translate_vm_addr(vm, (long long unsigned int) vm->mem_mmio);
+    translate_vm_addr(vm, (long long unsigned int) VM_MEM_MEASURES_ADDR);
+    translate_vm_addr(vm, (long long unsigned int) vm->mem_measures);
+    translate_vm_addr(vm, (long long unsigned int) VM_MEM_OWNPAGES_ADDR);
+    translate_vm_addr(vm, (long long unsigned int) vm->mem_own);
+    translate_vm_addr(vm, (long long unsigned int) VM_MEM_SHAREDPAGES_ADDR);
+    translate_vm_addr(vm, (long long unsigned int) vm->mem_shared);
+#endif
+
     /* generate own pages */
     uint _s = 0;
     while(_s < NB_OWN_PAGES*PAGESIZE) {
@@ -280,4 +288,40 @@ void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
     printf("%s : TSC %d KHz\n", vm->vm_name, tsc_freq);
 #endif
 
+}
+
+
+/** translate a virtual address according to the vcpu’s current address translation mode.
+ *
+ * @param vm
+ * @param addr
+ */
+void translate_vm_addr(vm* vm, const long long unsigned int addr) {
+    struct kvm_translation trans_addr;
+    trans_addr.linear_address = addr;
+    if (ioctl(vm->fd_vcpu, KVM_TRANSLATE, &trans_addr) < 0) { perror("KVM_TRANSLATION_ADDR"); exit(1);}
+
+    printf("linear_addr : 0x%llx\ntranslated_addr : 0x%llx\n", addr, trans_addr.physical_address);
+    printf("valide :%hhx\nwritable : %hhx\nusermode : %hhx\n", trans_addr.valid, trans_addr.writeable, trans_addr.usermode);
+}
+
+
+/** pretty print VM name
+ *
+ * @param r VM role
+ * @return VM role string
+ */
+char * vm_role(ROLE r){
+    switch (r) {
+        case VICTIM:
+            return "victime";
+        case ATTACKER:
+            return "attacker";
+        case DEFENDER:
+            return "defender";
+        case NUMBEROFROLE:
+            return "";
+        default:
+            return "";
+    }
 }

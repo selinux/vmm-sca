@@ -46,7 +46,5 @@ typedef struct _vm {
     struct kvm_userspace_memory_region mem_reg_shared;
 } vm;
 
-void vm_init(vm* vm, int vcpu_mmap_size, const char * shared_pages);
-
 
 #endif

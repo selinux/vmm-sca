@@ -2,6 +2,8 @@
 #define __KSM_H_
 
 #include <stdlib.h>
+#include <stdlib.h>
+#include <stdint.h>
 
 #define KSM_FSCAN       "/sys/kernel/mm/ksm/full_scans"
 #define KSM_MAX_PSH     "/sys/kernel/mm/ksm/max_page_sharing"
@@ -24,6 +26,7 @@ void ksm_close();
 uint ksm_enabled();
 uint ksm_shared_pages();
 uint ksm_max_shared_pages();
+int ksm_wait(const uint shared_pages);
 
 
 #endif

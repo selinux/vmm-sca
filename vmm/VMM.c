@@ -71,7 +71,7 @@ void vmm_init(int *vmm){
  * @param size number of 4K pages
  * @return status
  */
-int init_shared_pages(char** mem, const uint size){
+static int init_shared_pages(char** mem, const uint size){
 
     *mem = (char *) malloc(PAGESIZE*size);
     if (*mem == NULL) {perror("malloc error");return EXIT_FAILURE;}

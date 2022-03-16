@@ -85,5 +85,7 @@ typedef enum {
 
 
 void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages);
+void translate_vm_addr(vm* vm, const long long unsigned int addr);
+char * vm_role(ROLE r);
 
 #endif

@@ -16,12 +16,8 @@
  * =====================================================================================
  */
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
 #include <sys/ioctl.h>
-#include <sys/mman.h>
 #include <string.h>
 #include <stdint.h>
 #include <linux/kvm.h>
@@ -46,6 +42,9 @@ void *run_vm(void * ptr)
 
 	struct kvm_regs regs;
 	uint64_t memval = 0;
+
+//    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#the-kvm-run-structure
+
 
 	for (;;) {
 		if (ioctl(vm->fd_vcpu, KVM_RUN, 0) < 0) { perror("KVM_RUN"); ret = -1; }
@@ -125,19 +124,7 @@ void *time_master(void * ptr)
 
     printf("time master : waiting KSM memory deduplication...\n");
 
-    int i = 0;
-    uint64_t wait = 100*NB_SHARED_PAGES;
-    uint64_t nb_sp = ksm_shared_pages();
-    printf("KSM : shared pages at beginning : %ld\n", nb_sp);
-#ifdef DEBUG
-    printf("KSM : max pages sharing : %d\n", ksm_max_shared_pages());
-#endif
-    while(nb_sp < NB_SHARED_PAGES) {
-        i++;
-        usleep(wait);
-        nb_sp = ksm_shared_pages();
-        printf("KSM : shared pages after (%.2fs) : %ld\n",(wait/1000000.)*i, nb_sp);
-    }
+    ksm_wait(NB_SHARED_PAGES);
 
     pthread_barrier_wait (&barrier);
     printf("time master : running...\n");
