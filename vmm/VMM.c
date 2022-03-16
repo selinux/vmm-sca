@@ -105,8 +105,11 @@ int main(int argc, char ** argv)
     printf("VMM side channel test bench : version (%s) - %s\n", __KERN_VERSION__, __BUILD_TIME__);
     printf("----------------------------------------------------------------------------------------\n\n");
 
+    /* init KSM file descriptors */
+    if(ksm_init() != 0) { goto end_ksm;}
+
     /* test KSM capability */
-    if(!ksm_init()){ perror("KSM is not enabled (required) - please run make enable_ksm manually to enable it"); exit(EXIT_FAILURE); }
+    if(!ksm_enabled()){ perror("KSM is not enabled (required) - please run make enable_ksm manually to enable it"); exit(EXIT_FAILURE); }
 
     /* initialize KVM common settings */
     printf("VMM : initialize KVM\n");
@@ -175,6 +178,9 @@ int main(int argc, char ** argv)
 
     printf("VMM : free shared pages buffers\n");
     free(shared_page_1);
+
+ end_ksm:
+    ksm_close();
 
     exit(0);
 }

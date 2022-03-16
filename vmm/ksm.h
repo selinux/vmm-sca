@@ -18,7 +18,10 @@
 #define KSM_SNDUPS      "/sys/kernel/mm/ksm/stable_node_dups"
 #define KSM_USE_ZP      "/sys/kernel/mm/ksm/use_zero_pages"
 
-uint ksm_init();
+
+int ksm_init();
+void ksm_close();
+uint ksm_enabled();
 uint ksm_shared_pages();
 uint ksm_max_shared_pages();
 

@@ -20,45 +20,56 @@
 
 #include "ksm.h"
 
+FILE *ksm_run_fd = NULL;
+FILE *ksm_sp_fd = NULL;
+FILE *ksm_msp_fd = NULL;
 
-uint ksm_init(){
-    FILE *ksm_run = NULL;
-    if((ksm_run = fopen(KSM_RUN, "r")) == NULL){ perror("KSM run open error");}
+int ksm_init(){
+    if((ksm_run_fd = fopen(KSM_RUN, "r")) == NULL){ perror("KSM run open error");}
+    if((ksm_sp_fd = fopen(KSM_PSHARED, "r")) == NULL){ perror("KSM page shared open error");}
+    if((ksm_msp_fd = fopen(KSM_MAX_PSH, "r")) == NULL){ perror("KSM run open error");}
 
-    char ksm_state = fgetc(ksm_run);
+    return 0;
+}
+
+void ksm_close(){
+
+    if(ksm_run_fd != NULL) {fclose(ksm_run_fd);}
+    if(ksm_sp_fd != NULL) {fclose(ksm_sp_fd);}
+    if(ksm_msp_fd != NULL) {fclose(ksm_msp_fd);}
+}
+
+
+uint ksm_enabled(){
+
+    char ksm_state = fgetc(ksm_run_fd);
     ksm_state == '1' ? printf("VMM : KSM enabled - continue\n") : printf("KSM not enabled\n");
-    fclose(ksm_run);
+    fseek(ksm_run_fd, 0, SEEK_SET);
 
     return ksm_state == '1' ? 1 : 0;
 }
 
 uint ksm_shared_pages(){
-    FILE *ksm_sp = NULL;
     char buffer[256];
     u_int64_t sp = 0;
-    if((ksm_sp = fopen(KSM_PSHARED, "r")) == NULL){ perror("KSM shared pages open error");}
 
-    int count = fread(&buffer, sizeof(char), 20, ksm_sp);
-
+    int count = fread(&buffer, sizeof(char), 20, ksm_sp_fd);
     if(count > 0)
         sp = atoi(buffer);
 
-    // TODO : don't open and close at each call
-    fclose(ksm_sp);
+    fseek(ksm_sp_fd, 0, SEEK_SET);
     return sp;
 }
 
 uint ksm_max_shared_pages(){
-    FILE *ksm_sp = NULL;
     char buffer[256];
     u_int64_t sp = 0;
-    if((ksm_sp = fopen(KSM_MAX_PSH, "r")) == NULL){ perror("KSM max sharing pages open error");}
 
-    int count = fread(&buffer, sizeof(char), 20, ksm_sp);
-
+    int count = fread(&buffer, sizeof(char), 20, ksm_msp_fd);
     if(count > 0)
         sp = atoi(buffer);
 
-    fclose(ksm_sp);
+    fseek(ksm_msp_fd, 0, SEEK_SET);
+
     return sp;
 }
