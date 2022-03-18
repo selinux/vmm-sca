@@ -71,6 +71,14 @@ static void init_long_mode(vm *vm, struct kvm_sregs *sregs)
  */
 static void init_segments(struct kvm_sregs *sregs)
 {
+    /* In 64 bit, segemntation is not used for addressing but only used to know if
+     * something is in user mode (ring 3) or kernel mode(ring 0). This is later been used for paging also.
+     *
+     * Only CS and SS segments are define because all type of code access is checked through
+     * CS register RPL and all data access is checked through SS register.
+     *
+     * src : https://nixhacker.com/segmentation-in-intel-64-bit/
+     * */
     struct kvm_segment seg = {
             .base = 0,
             .limit = 0xffffffff,
@@ -104,7 +112,7 @@ static void init_registers(struct kvm_regs * regs){
     /* instruction pointer at bottom of run slot */
     regs->rip = 0;
     /* create stack at top of run slot */
-    regs->rsp = STACK_ADDR;
+    regs->rsp = STACK_END_ADDR;
 }
 
 
@@ -141,6 +149,10 @@ void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
 //    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-cap-sw-tlb       Configures the virtual CPU’s TLB array, establishing a shared memory area between userspace and KVM.
 
 //    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#capabilities-that-can-be-enabled-on-vms
+
+//    MMU info ? :
+//    https://01.org/linuxgraphics/gfx-docs/drm/virt/kvm/mmu.html
+
 
     printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
     vm->mem_run = mmap(NULL, VM_MEM_RUN_SIZE, PROT_READ | PROT_WRITE,
@@ -221,14 +233,14 @@ void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
     if (vm->vcpu.kvm_run == MAP_FAILED) { perror("mmap kvm_run"); exit(1); }
 
     /* get special registers */
-    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS, &vm->sregs) < 0) { perror("KVM_GET_SREGS");	exit(1);}
+    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS2, &vm->sregs) < 0) { perror("KVM_GET_SREGS");	exit(1);}
 
     /* init 64bits mode */
     printf("%s (%s) : init vcpu long mode (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
     init_long_mode(vm, &vm->sregs);
     printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
     init_segments(&vm->sregs);
-    if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &vm->sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
+    if (ioctl(vm->fd_vcpu, KVM_SET_SREGS2, &vm->sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
 
     /* init vcpu registers instruction pointer and stack pointer */
     init_registers(&vm->regs);
@@ -251,10 +263,11 @@ void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
     }
 
     /* init mmio and time sampling storage */
+//    memset(vm->mem_mmio, 'A', VM_MEM_MMIO_SIZE);            // test
 //    memset(vm->mem_mmio, 0, VM_MEM_MMIO_SIZE);
 //    memset(vm->mem_measures, 0, VM_MEM_MEASURES_SIZE);
-    memset(vm->mem_mmio, 'A', VM_MEM_MMIO_SIZE);            // test
-    memset(vm->mem_measures, 'B', VM_MEM_MEASURES_SIZE);    // test
+//    memset(vm->mem_mmio, 'A', VM_MEM_MMIO_SIZE);            // test
+//    memset(vm->mem_measures, 'B', VM_MEM_MEASURES_SIZE);    // test
 //    memset(vm->mem_own, 'C', VM_MEM_OWNPAGES_SIZE);         // test
 //    memset(vm->mem_shared, 'D', VM_MEM_SHAREDPAGES_SIZE);   // test
 

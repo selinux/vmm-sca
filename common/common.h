@@ -13,10 +13,9 @@
 #define STACK_ADDR              (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE-1)
 
 #define VM_MEM_MMIO_ADDR        (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE)
-#define VM_MEM_MMIO_SIZE        (0x1000)
+#define VM_MEM_MMIO_SIZE        (PAGES2SIZE(NB_MMIO_PAGES))
 
 #define NB_SAMPLES              (0x10)
-//#define NB_SAMPLES              (0x208)
 #define VM_MEM_MEASURES_ADDR    (VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE)
 #define VM_MEM_MEASURES_SIZE    (SAMPLES2PAGES(NB_SAMPLES))
 

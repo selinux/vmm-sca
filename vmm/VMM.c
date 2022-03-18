@@ -116,6 +116,7 @@ int main(int argc, char ** argv)
     vmm_init(&vmm);
     vcpu_mmap_size = ioctl(vmm, KVM_GET_VCPU_MMAP_SIZE, 0);          // const and used by all VM
     if (vcpu_mmap_size <= 0) { perror("KVM_GET_VCPU_MMAP_SIZE"); exit(1);}
+    if (vcpu_mmap_size < (int)sizeof(struct kvm_run)) { perror("KVM_GET_VCPU_MMAP_SIZE unexpectedly small"); exit(1);}
 
     /* init VMM pages to be transferred to VMs */
     printf("VMM : filled %d pages with random data to be shared between VMs\n", NB_SHARED_PAGES);
