@@ -27,6 +27,7 @@
 #include "VMM-thread.h"
 
 #include "ksm.h"
+#include "VM.h"
 
 
 extern pthread_barrier_t   barrier; // wait until all VMs are started
@@ -36,7 +37,7 @@ void *run_vm(void * ptr)
     vm *vm = (void *)ptr;
     int ret = 1;
 
-    printf("%s : waiting to start...\n", vm->vm_name);
+    printf("%s : waiting...\n", vm->vm_name);
     pthread_barrier_wait (&barrier);
     printf("%s : running...\n", vm->vm_name);
 
@@ -48,7 +49,7 @@ void *run_vm(void * ptr)
 
 	for (;;) {
 		if (ioctl(vm->fd_vcpu, KVM_RUN, 0) < 0) { perror("KVM_RUN"); ret = -1; }
-        printf("%s : exit reason %d\n", vm->vm_name, vm->vcpu.kvm_run->exit_reason);
+//        printf("%s : exit reason %d\n", vm->vm_name, vm->vcpu.kvm_run->exit_reason);
         switch (vm->vcpu.kvm_run->exit_reason) {
             case KVM_EXIT_HLT:
                 ret = 0;
@@ -71,18 +72,17 @@ void *run_vm(void * ptr)
                        && vm->vcpu.kvm_run->io.port == PMIO_PRINT_MEASURES) {
                     printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
 
-                    long long unsigned *m = (long long unsigned *)vm->mem_run+(0x10000/8);
+                    long long unsigned *m = (long long unsigned *)vm->mem_measures;
 //                    char *m = (char *)vm->mem_run+0x10000;
                     for(int i=0; i< NB_SAMPLES; i++){
-                        unsigned long long dm = *(unsigned long long *)m-*(unsigned long long *)(m-1);
-                        printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *(unsigned long long *)m, dm);
-//                        printf("%s (%04d) : %llu\n", vm->vm_name, i, *(unsigned long long *)m);
+//                        unsigned long long dm = *(unsigned long long *)m-*(unsigned long long *)(m-1);
+//                        if(dm < 48000000)
+//                            printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *(unsigned long long *)m, dm);
+                        printf("%s (%04d) : %llu\n", vm->vm_name, i, *(unsigned long long *)m);
 //                        printf("%s (%04d) : %c\n", vm->vm_name, i, *m);
                         m++;
                    }
                 }
-                if(vm->vcpu.kvm_run->io.count)
-                    printf("at least !!  %u \n", vm->vcpu.kvm_run->io.count);
 
                 continue;
 
@@ -124,16 +124,24 @@ void *time_master(void * ptr)
 
     printf("time master : waiting KSM memory deduplication...\n");
 
-    ksm_wait(NB_SHARED_PAGES);
+    if(NUMBEROFROLE > 1){
+        ksm_wait(NB_SHARED_PAGES);
+    }
 
     pthread_barrier_wait (&barrier);
     printf("time master : running...\n");
 
-    usleep(100000);
-    *(uint64_t *)(vms[ATTACKER].mem_run+0x500) = 1;   // test unlock VM victim
+    translate_vm_addr(&vms[0], VM_MEM_PT_ADDR);
+//    usleep(100000);
+//    *(uint64_t *)(vms[ATTACKER].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_EXIT;   // test unlock VM victim
 
 //    ioctl(vms[VICTIM].fd_vcpu, KVM_INTERRUPT, 20);
+//    ioctl(vms[VICTIM].fd_vcpu, KVM_GET_TSC_KHZ, 20);
 
+//    *(uint64_t *)(vms[VICTIM].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_MEASURE;
+//    *(uint64_t *)(vms[VICTIM].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_PRINT_MEASURES;
+//    *(uint64_t *)(vms[VICTIM].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_EXIT;
+//    usleep(1000000);
     ret = 0;
     pthread_exit((void*)&ret);
 }

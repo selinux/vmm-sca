@@ -9,14 +9,22 @@
 
 #define VM_MEM_RUN_ADDR         (0x0)
 #define VM_MEM_RUN_SIZE         (0x200000)
-#define STACK_OFFSET            (0x100000)
-#define STACK_ADDR              (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE-1)
+#define STACK_BOTTOM_ADDR       (0x100000)
+#define STACK_TOP_ADDR          (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE)
 
+#define NB_MMIO_PAGES           (0x1)
 #define VM_MEM_MMIO_ADDR        (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE)
 #define VM_MEM_MMIO_SIZE        (PAGES2SIZE(NB_MMIO_PAGES))
 
+#define NB_PT_PML4_PAGES        (0x1)                               // CR3 entry
+#define NB_PT_PDPT_PAGES        (0x1)                               // first Gb is enough
+#define NB_PT_PD_PAGES          (0x2)                               // 2*512*2Mb = 2Gb
+#define NB_PTE_PAGES            (NB_PT_PD_PAGES*512)                // 1024*2Mb
+#define VM_MEM_PT_ADDR          (VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE)
+#define VM_MEM_PT_SIZE          ((NB_PT_PML4_PAGES+NB_PT_PDPT_PAGES+NB_PT_PD_PAGES+NB_PTE_PAGES)*PAGESIZE)
+
 #define NB_SAMPLES              (0x10)
-#define VM_MEM_MEASURES_ADDR    (VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE)
+#define VM_MEM_MEASURES_ADDR    (VM_MEM_PT_ADDR+VM_MEM_PT_SIZE)
 #define VM_MEM_MEASURES_SIZE    (SAMPLES2PAGES(NB_SAMPLES))
 
 #define NB_OWN_PAGES            (0x20)
@@ -30,6 +38,18 @@
 #define PMIO_PRINT_MEASURES         0xABBA
 #define VM_EXIT_RETURN_CODE         42
 #define VM_EXIT_RETURN_CODE_ADDR    0x400
+
+#define PRIMITIVE_CMD_ADDR          (0x500)
+
+typedef enum {
+    PRIMITIVE_WAIT=0,
+    PRIMITIVE_MEASURE,
+    PRIMITIVE_READ,
+    PRIMITIVE_WRITE,
+    PRIMITIVE_PRINT_MEASURES,
+    PRIMITIVE_EXIT
+} SCA_PRIMITIVE;
+
 
 typedef enum {
     VICTIM,

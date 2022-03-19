@@ -28,38 +28,59 @@
 #include "VM.h"
 
 
+static void init_pages_tables(vm* vm){
+
+    /* page map level 4 */
+    uint64_t *pml4 = (uint64_t *)vm->mem_pages_tables;
+
+    /* page directory page table (second level, 1 is enough) */
+    uint64_t *pdpt = (uint64_t *)(vm->mem_pages_tables + 0x1000);
+
+    /* page directory table (512*2Mb = 1Gb) */
+    uint64_t *pd = (uint64_t *)(vm->mem_pages_tables + 0x2000);     // add loop to map more than the first 1Gb
+    uint64_t *pte = (uint64_t *)(pd+NB_PT_PD_PAGES*PAGESIZE);       // add loop to map more than the first 1Gb
+
+    /* PML4 entry (1 PDPT) */
+    pml4[0] = PDE64_PRESENT | PDE64_RW | ((VM_MEM_PT_ADDR+0x1000LL)<<12);
+    /* PDPT entries (2 PD) */
+    for(uint64_t i = 0; i < NB_PT_PD_PAGES; i++) {
+        pdpt[i] = PDE64_PRESENT | PDE64_RW | ((VM_MEM_PT_ADDR+0x2000LL+(i*PAGESIZE)) << 12);
+    }
+    /* PD entries (2*512 PT) */
+    for(uint64_t i = 0; i < NB_PT_PD_PAGES*512; i++) {
+        pd[i] = PDE64_PRESENT | PDE64_RW | ((VM_MEM_PT_ADDR+0x3000LL+(i*PAGESIZE)) << 12);
+    }
+    /* PT entries identity mapping */
+    for(uint64_t i = 0; i < NB_PT_PD_PAGES*512*512; i++){
+        pte[i] = PDE64_PRESENT | PDE64_RW | PDE64_PS | ((i * PAGESIZE) << 12);
+    }
+    printf("Debug - PML4[0] 0x%lx\n", pml4[0]>>12);
+    printf("Debug - PDPT[0] 0x%lx\n", pdpt[0]>>12);
+    printf("Debug - PD[0] 0x%lx\n", pd[0]>>12);
+    printf("Debug - PD[1] 0x%lx\n", pd[1]>>12);
+    printf("Debug - PT[0] 0x%lx\n", pte[0]>>12);
+    printf("Debug - PT[1] 0x%lx\n", pte[1]>>12);
+    printf("Debug - PT[10] 0x%lx\n", pte[10]>>12);
+    printf("Debug - PT[511] 0x%lx\n", pte[511]>>12);
+    printf("Debug - PT[0x1000] 0x%lx\n", pte[0x1000]>>12);
+    printf("Debug - PT[(2*512*512)-1] 0x%lx\n", pte[(2*512*512)-1]>>12);
+}
+
+
 /** Initialize vcpu long mode (64bits)
  *
  * @param vm
  * @param sregs vcpu control registers
  */
-static void init_long_mode(vm *vm, struct kvm_sregs *sregs)
+static void init_long_mode(struct kvm_sregs2 *sregs)
 {
-    /* init virtual addressing tables */
-
-    /* page map level 4 */
-    uint64_t pml4_addr = 0x2000;
-    uint64_t *pml4 = (void *)(vm->mem_run + pml4_addr);
-
-    /* page directory page table */
-    uint64_t pdpt_addr = 0x3000;
-    uint64_t *pdpt = (void *)(vm->mem_run + pdpt_addr);
-
-    /* page directory table */
-    uint64_t pd_addr = 0x4000;
-    uint64_t *pd = (void *)(vm->mem_run + pd_addr);
-
-    /* link them */
-    pml4[0] = PDE64_PRESENT | PDE64_RW | pdpt_addr;
-    pdpt[0] = PDE64_PRESENT | PDE64_RW | pd_addr;
-
-    /* page entry */
-    for(uint64_t i = 0; i < 0x200; i++)
-        pd[i] = PDE64_PRESENT | PDE64_RW | PDE64_PS | (i * PAGESIZE);
-
     /* init long mode (ref : https://en.wikipedia.org/wiki/Control_register#CR0) */
+//    struct kvm_dtable _gdt;
+//    _gdt.base = 0;
+//    _gdt.limit = 0;
+//    sregs->gdt = _gdt;
     sregs->cr0 = CR0_PE | CR0_MP | CR0_ET | CR0_NE | CR0_WP | CR0_AM | CR0_PG;  // CR0 : flags
-    sregs->cr3 = pml4_addr;                                                     // point to page table entry
+    sregs->cr3 = (uint64_t)VM_MEM_PT_ADDR<<12;                                                // point to pml4
     sregs->cr4 = CR4_PAE | CR4_OSFXSR | CR4_OSXMMEXCPT | CR4_TSD | CR4_PCE;     // TSD : If set, RDTSC instruction can only be executed when in ring 0
     sregs->efer = EFER_LME | EFER_LMA;                                          // PCE : Performance-Monitoring Counter enable
                                                                                 // PGE : If set, address translations (PDE or PTE records) may be shared between address spaces
@@ -69,7 +90,7 @@ static void init_long_mode(vm *vm, struct kvm_sregs *sregs)
  *
  * @param sregs vcpu control registers
  */
-static void init_segments(struct kvm_sregs *sregs)
+static void init_segments(struct kvm_sregs2 *sregs)
 {
     /* In 64 bit, segemntation is not used for addressing but only used to know if
      * something is in user mode (ring 3) or kernel mode(ring 0). This is later been used for paging also.
@@ -112,9 +133,34 @@ static void init_registers(struct kvm_regs * regs){
     /* instruction pointer at bottom of run slot */
     regs->rip = 0;
     /* create stack at top of run slot */
-    regs->rsp = STACK_END_ADDR;
+    regs->rsp = STACK_TOP_ADDR;
 }
 
+
+/** init a memory region
+ *
+ * @param vm vm fd
+ * @param mem mem addr
+ * @param slot
+ * @param flags
+ * @param guest_pa guest physical address
+ * @param size
+ * @return 0 or error
+ */
+static int init_memory_slot(vm* vm, void* mem, MEM_REGION slot, __u32 flags, __u64 guest_pa, __u64 size){
+
+   	struct kvm_userspace_memory_region memreg;
+    memreg.slot = slot;
+    memreg.flags = flags;
+    memreg.guest_phys_addr = guest_pa;
+    memreg.memory_size = size;
+    memreg.userspace_addr = (unsigned long)mem;
+
+    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &memreg) < 0) { perror("KVM_SET_USER_MEMORY_REGION"); return -1;}
+    printf("Debug - memory region :slot %d, flag %d, gla 0x%llx, size 0x%llx - hva %p\n", slot, flags, guest_pa, size, mem);
+
+    return 0;
+}
 
 /** Initialize a VM according to his role
  *
@@ -125,8 +171,6 @@ static void init_registers(struct kvm_regs * regs){
 void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
 {
 
-//    if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) { perror("KVM_SET_TSS_ADDR"); exit(1);}
-//    if(ioctl(vm->fd_vm, KVM_CREATE_IRQCHIP, 0) < 0){ perror("KVM_CREATE_IRQCHIP"); exit(1);}
 //    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-irq-line
 //    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-create-pit2
 //    https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-irqfd            Allows setting an eventfd to directly trigger a guest interrupt.
@@ -154,99 +198,17 @@ void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
 //    https://01.org/linuxgraphics/gfx-docs/drm/virt/kvm/mmu.html
 
 
-    printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
+    if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) { perror("KVM_SET_TSS_ADDR"); exit(1);}
+//    if(ioctl(vm->fd_vm, KVM_CREATE_IRQCHIP, 0) < 0){ perror("KVM_CREATE_IRQCHIP"); exit(1);}
+//    printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
+//    printf("%s (%s) : init memory slots\n", vm->vm_name, vm_role(vm->vm_role));
+
+
+    /* VM code,data,stack */
     vm->mem_run = mmap(NULL, VM_MEM_RUN_SIZE, PROT_READ | PROT_WRITE,
                        MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (vm->mem_run == MAP_FAILED) { perror("mmap run region"); exit(1);}
-
-    vm->mem_mmio = mmap(NULL, VM_MEM_MMIO_SIZE, PROT_READ | PROT_WRITE,
-                        MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_mmio == MAP_FAILED) { perror("mmap mmio region"); exit(1);}
-
-    vm->mem_measures = mmap(NULL, VM_MEM_MEASURES_SIZE, PROT_READ | PROT_WRITE,
-                            MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_measures == MAP_FAILED) { perror("mmap measures region"); exit(1);}
-
-    vm->mem_own = mmap(NULL, VM_MEM_OWNPAGES_SIZE, PROT_READ | PROT_WRITE,
-                       MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_own == MAP_FAILED) { perror("mmap own pages region"); exit(1);}
-
-    vm->mem_shared = mmap(NULL, VM_MEM_SHAREDPAGES_SIZE, PROT_READ | PROT_WRITE,
-                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (vm->mem_shared == MAP_FAILED) { perror("mmap shared pages region"); exit(1);}
-
     /* host kernel memory regions advise */
-    madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_UNMERGEABLE);
-    madvise(vm->mem_mmio, VM_MEM_MMIO_SIZE, MADV_UNMERGEABLE);
-    madvise(vm->mem_measures, VM_MEM_MEASURES_SIZE, MADV_UNMERGEABLE);
-    madvise(vm->mem_own, VM_MEM_OWNPAGES_SIZE, MADV_UNMERGEABLE);      // avoid merging
-    madvise(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE, MADV_MERGEABLE);  // advise merge
-
-    printf("%s (%s) : init memory slots\n", vm->vm_name, vm_role(vm->vm_role));
-    /* VM code,data,stack */
-    vm->mem_reg_run.slot = MEM_SLOT_0;
-    vm->mem_reg_run.flags = 0;
-    vm->mem_reg_run.guest_phys_addr = VM_MEM_RUN_ADDR;
-    vm->mem_reg_run.memory_size = VM_MEM_RUN_SIZE;
-    vm->mem_reg_run.userspace_addr = (unsigned long)vm->mem_run;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_run) < 0) { perror("KVM_SET_USER_MEMORY_REGION VMRUN"); exit(1);}
-
-    /* MMIO (unused yet) */
-    vm->mem_reg_mmio.slot = MEM_SLOT_1;
-    vm->mem_reg_mmio.flags = KVM_MEM_READONLY;             // VM_EXIT
-    vm->mem_reg_mmio.guest_phys_addr = VM_MEM_MMIO_ADDR;
-    vm->mem_reg_mmio.memory_size = VM_MEM_MMIO_SIZE;
-    vm->mem_reg_mmio.userspace_addr = (unsigned long)vm->mem_mmio;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_mmio) < 0) { perror("KVM_SET_USER_MEMORY_REGION MMIO"); exit(1);}
-
-    /* time measurement region */
-    vm->mem_reg_measures.slot = MEM_SLOT_2;
-    vm->mem_reg_measures.flags = 0;
-    vm->mem_reg_measures.guest_phys_addr = VM_MEM_MEASURES_ADDR;
-    vm->mem_reg_measures.memory_size = VM_MEM_MEASURES_SIZE;
-    vm->mem_reg_measures.userspace_addr = (unsigned long)vm->mem_measures;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_measures) < 0) { perror("KVM_SET_USER_MEMORY_REGION MEASURES"); exit(1);}
-
-    /* VM own pages (not shared) for read/write access tests */
-    vm->mem_reg_own.slot = MEM_SLOT_3;
-    vm->mem_reg_own.flags = 0;
-    vm->mem_reg_own.guest_phys_addr = VM_MEM_OWNPAGES_ADDR;
-    vm->mem_reg_own.memory_size = VM_MEM_OWNPAGES_SIZE;
-    vm->mem_reg_own.userspace_addr = (unsigned long)vm->mem_own;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_own) < 0) { perror("KVM_SET_USER_MEMORY_REGION OWN PAGES"); exit(1);}
-
-    /* VMs shared pages for read access, flush, COW,... tests (attacker) */
-    vm->mem_reg_shared.slot = MEM_SLOT_4;
-    vm->mem_reg_shared.flags = 0;
-    vm->mem_reg_shared.guest_phys_addr = VM_MEM_SHAREDPAGES_ADDR;
-    vm->mem_reg_shared.memory_size = VM_MEM_SHAREDPAGES_SIZE;
-    vm->mem_reg_shared.userspace_addr = (unsigned long)vm->mem_shared;
-    if (ioctl(vm->fd_vm, KVM_SET_USER_MEMORY_REGION, &vm->mem_reg_shared) < 0) { perror("KVM_SET_USER_MEMORY_REGION SHARED PAGES"); exit(1);}
-
-    /* init vcpu */
-    printf("%s (%s) : create vcpu\n", vm->vm_name, vm_role(vm->vm_role));
-    vm->fd_vcpu = ioctl(vm->fd_vm, KVM_CREATE_VCPU, 0);
-    if (vm->fd_vcpu < 0) { perror("KVM_CREATE_VCPU"); exit(1);}
-
-    vm->vcpu.kvm_run = mmap(NULL, vcpu_mmap_size, PROT_READ | PROT_WRITE,
-                            MAP_SHARED, vm->fd_vcpu, 0);
-    if (vm->vcpu.kvm_run == MAP_FAILED) { perror("mmap kvm_run"); exit(1); }
-
-    /* get special registers */
-    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS2, &vm->sregs) < 0) { perror("KVM_GET_SREGS");	exit(1);}
-
-    /* init 64bits mode */
-    printf("%s (%s) : init vcpu long mode (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
-    init_long_mode(vm, &vm->sregs);
-    printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
-    init_segments(&vm->sregs);
-    if (ioctl(vm->fd_vcpu, KVM_SET_SREGS2, &vm->sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
-
-    /* init vcpu registers instruction pointer and stack pointer */
-    init_registers(&vm->regs);
-    printf("%s (%s) : init vcpu registers (rip,rsp)\n", vm->vm_name, vm_role(vm->vm_role));
-    if (ioctl(vm->fd_vcpu, KVM_SET_REGS, &vm->regs) < 0) { perror("KVM_SET_REGS"); exit(1);}
-
     /* personalize VM role */
     switch(vm->vm_role){
         case VICTIM:
@@ -262,44 +224,117 @@ void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages)
             break;
     }
 
-    /* init mmio and time sampling storage */
-//    memset(vm->mem_mmio, 'A', VM_MEM_MMIO_SIZE);            // test
-//    memset(vm->mem_mmio, 0, VM_MEM_MMIO_SIZE);
-//    memset(vm->mem_measures, 0, VM_MEM_MEASURES_SIZE);
-//    memset(vm->mem_mmio, 'A', VM_MEM_MMIO_SIZE);            // test
-//    memset(vm->mem_measures, 'B', VM_MEM_MEASURES_SIZE);    // test
-//    memset(vm->mem_own, 'C', VM_MEM_OWNPAGES_SIZE);         // test
-//    memset(vm->mem_shared, 'D', VM_MEM_SHAREDPAGES_SIZE);   // test
+    /* MMIO */
+    vm->mem_mmio = mmap(NULL, VM_MEM_MMIO_SIZE, PROT_READ | PROT_WRITE,
+                        MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (vm->mem_mmio == MAP_FAILED) { perror("mmap mmio region"); exit(1);}
+    memset(vm->mem_mmio, 0, VM_MEM_MMIO_SIZE);
 
-#ifdef DEBUG
-    translate_vm_addr(vm, (long long unsigned int) VM_MEM_MMIO_ADDR);
-    translate_vm_addr(vm, (long long unsigned int) vm->mem_mmio);
-    translate_vm_addr(vm, (long long unsigned int) VM_MEM_MEASURES_ADDR);
-    translate_vm_addr(vm, (long long unsigned int) vm->mem_measures);
-    translate_vm_addr(vm, (long long unsigned int) VM_MEM_OWNPAGES_ADDR);
-    translate_vm_addr(vm, (long long unsigned int) vm->mem_own);
-    translate_vm_addr(vm, (long long unsigned int) VM_MEM_SHAREDPAGES_ADDR);
-    translate_vm_addr(vm, (long long unsigned int) vm->mem_shared);
-#endif
+    /* Pages tables */
+    vm->mem_pages_tables = mmap(NULL, VM_MEM_PT_SIZE, PROT_READ | PROT_WRITE,
+                                MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (vm->mem_pages_tables == MAP_FAILED) { perror("mmap pages tables region"); exit(1);}
+    memset(vm->mem_pages_tables, 0, VM_MEM_PT_SIZE);
+    /* init 4-level paging  */
+    init_pages_tables(vm);
+//    printf("%s (%s) : init memory paging  (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
 
-    /* generate own pages */
+    /* time measurement region */
+    vm->mem_measures = mmap(NULL, VM_MEM_MEASURES_SIZE, PROT_READ | PROT_WRITE,
+                            MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (vm->mem_measures == MAP_FAILED) { perror("mmap measures region"); exit(1);}
+    memset(vm->mem_measures, 0, VM_MEM_MEASURES_SIZE);
+
+    /* VM own pages (not shared) for read/write access tests */
+    vm->mem_own = mmap(NULL, VM_MEM_OWNPAGES_SIZE, PROT_READ | PROT_WRITE,
+                       MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (vm->mem_own == MAP_FAILED) { perror("mmap own pages region"); exit(1);}
+    /* generate own pages data */
     uint _s = 0;
     while(_s < NB_OWN_PAGES*PAGESIZE) {
         _s += getrandom(vm->mem_own, (NB_OWN_PAGES*PAGESIZE) - _s, GRND_NONBLOCK);
     }
-    printf("%s (%s) : fill %d pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
+//    printf("%s (%s) : fill %d pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
 
-    /* transfer shared pages */
-    char *_c = vm->mem_shared;
-    for(int i = 0; i< NB_SHARED_PAGES*PAGESIZE; i++){
-        *(_c++) = shared_pages[i];
-    }
-    printf("%s (%s) : transferred %d shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
-#ifdef DEBUG
+    /* VMs shared pages for read access, flush, COW,... tests (attacker) */
+    /* shared pages */
+    vm->mem_shared = mmap(NULL, VM_MEM_SHAREDPAGES_SIZE, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (vm->mem_shared == MAP_FAILED) { perror("mmap shared pages region"); exit(1);}
+    /* transfer shared pages data */
+    memcpy(vm->mem_shared, shared_pages, NB_SHARED_PAGES*PAGESIZE);
+//    printf("%s (%s) : transferred %d shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
+
+
+    /* initialize and attach memory region to VM */
+    madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_UNMERGEABLE);
+    if (init_memory_slot(vm, vm->mem_run, MEM_SLOT_0, 0, VM_MEM_RUN_ADDR, VM_MEM_RUN_SIZE) != 0){ perror("VM init memory region run KVM_SET_USER_MEMORY_REGION");}
+
+    madvise(vm->mem_mmio, VM_MEM_MMIO_SIZE, MADV_UNMERGEABLE);
+    if (init_memory_slot(vm, vm->mem_mmio, MEM_SLOT_1, KVM_MEM_READONLY, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_SIZE) != 0){ perror("VM init memory region MMIO KVM_SET_USER_MEMORY_REGION");}
+
+    madvise(vm->mem_pages_tables, VM_MEM_PT_SIZE, MADV_UNMERGEABLE);
+    if (init_memory_slot(vm, vm->mem_pages_tables, MEM_SLOT_2, 0, VM_MEM_PT_ADDR, VM_MEM_PT_SIZE) != 0){ perror("VM init memory region pages tables KVM_SET_USER_MEMORY_REGION");}
+
+    madvise(vm->mem_measures, VM_MEM_MEASURES_SIZE, MADV_UNMERGEABLE);
+    if (init_memory_slot(vm, vm->mem_measures, MEM_SLOT_3, 0, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_SIZE) != 0){ perror("VM init memory region measures KVM_SET_USER_MEMORY_REGION");}
+
+    madvise(vm->mem_own, VM_MEM_OWNPAGES_SIZE, MADV_UNMERGEABLE);      // avoid merging
+    if (init_memory_slot(vm, vm->mem_own, MEM_SLOT_4, 0, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE) != 0){ perror("VM init memory region own pages KVM_SET_USER_MEMORY_REGION");}
+
+    madvise(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE, MADV_MERGEABLE);  // advise merge
+    if (init_memory_slot(vm, vm->mem_shared, MEM_SLOT_5, 0, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE) != 0){ perror("VM init memory region own pages KVM_SET_USER_MEMORY_REGION");}
+
+    /* init vcpu */
+//    printf("%s (%s) : create vcpu\n", vm->vm_name, vm_role(vm->vm_role));
+    vm->fd_vcpu = ioctl(vm->fd_vm, KVM_CREATE_VCPU, 0);
+    if (vm->fd_vcpu < 0) { perror("KVM_CREATE_VCPU"); exit(1);}
+    vm->vcpu.kvm_run = mmap(NULL, vcpu_mmap_size, PROT_READ | PROT_WRITE,
+                            MAP_SHARED, vm->fd_vcpu, 0);
+    if (vm->vcpu.kvm_run == MAP_FAILED) { perror("mmap kvm_run"); exit(1); }
+
+    /* get special registers */
+    struct kvm_sregs2 sregs;
+    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS2, &sregs) < 0) { perror("KVM_GET_SREGS2");	exit(1);}
+
+    /* init 64bits mode */
+    init_long_mode(&sregs);
+//    printf("%s (%s) : init vcpu long mode (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
+
+    /* init segmentation */
+    init_segments(&sregs);
+//    printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
+
+    /* set special registers */
+    if (ioctl(vm->fd_vcpu, KVM_SET_SREGS2, &sregs) < 0) { perror("KVM_SET_SREGS2"); exit(1);}
+
+    /* init vcpu initial state (instruction and stack pointer) */
+    struct kvm_regs regs;
+    init_registers(&regs);
+    if (ioctl(vm->fd_vcpu, KVM_SET_REGS, &regs) < 0) { perror("KVM_SET_REGS"); exit(1);}
+
+    struct kvm_mp_state mp_state;
+    if (ioctl(vm->fd_vcpu, KVM_GET_MP_STATE, &mp_state) < 0) { perror("KVM_GET_MP_STATE"); exit(1);}
+    printf("%s (%s) : vcpu state %d\n", vm->vm_name, vm_role(vm->vm_role), mp_state.mp_state);
+
+//    printf("%s (%s) : init vcpu registers (rip,rsp)\n", vm->vm_name, vm_role(vm->vm_role));
+
+//#ifdef DEBUG
+//    translate_vm_addr(vm, (long long unsigned int) VM_MEM_MMIO_ADDR);
+    translate_vm_addr(vm, (long long unsigned int) VM_MEM_RUN_ADDR+0xfff);
+//    translate_vm_addr(vm, (long long unsigned int) VM_MEM_MEASURES_ADDR-10);
+//    translate_vm_addr(vm, (long long unsigned int) VM_MEM_SHAREDPAGES_ADDR+10);
+    translate_vm_addr(vm, (long long unsigned int) STACK_BOTTOM_ADDR);
+    translate_vm_addr(vm, (long long unsigned int) STACK_TOP_ADDR);
+//    translate_vm_addr(vm, (long long unsigned int) VM_MEM_OWNPAGES_ADDR);
+    translate_vm_addr(vm, (long long unsigned int) VM_MEM_SHAREDPAGES_ADDR);
+    translate_vm_addr(vm, (long long unsigned int) vm->mem_pages_tables+0x1000);
+//#endif
+
+
     /* print TSC frequency from guest pov */
     int tsc_freq = ioctl(vm->fd_vcpu, KVM_GET_TSC_KHZ, 0);
-    printf("%s : TSC %d KHz\n", vm->vm_name, tsc_freq);
-#endif
+    printf("%s : TSC %d MHz\n", vm->vm_name, tsc_freq/1000);
 
 }
 
@@ -315,7 +350,7 @@ void translate_vm_addr(vm* vm, const long long unsigned int addr) {
     if (ioctl(vm->fd_vcpu, KVM_TRANSLATE, &trans_addr) < 0) { perror("KVM_TRANSLATION_ADDR"); exit(1);}
 
     printf("linear_addr : 0x%llx\ntranslated_addr : 0x%llx\n", addr, trans_addr.physical_address);
-    printf("valide :%hhx\nwritable : %hhx\nusermode : %hhx\n", trans_addr.valid, trans_addr.writeable, trans_addr.usermode);
+    printf("valid\t : %hhx\nwritable : %hhx\nusermode : %hhx\n", trans_addr.valid, trans_addr.writeable, trans_addr.usermode);
 }
 
 

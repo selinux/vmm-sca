@@ -136,8 +136,14 @@ int main(int argc, char ** argv)
            MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_SIZE, MEM_SLOT_2, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_SIZE,
            MEM_SLOT_3, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE, MEM_SLOT_4, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE);
 #endif
+    printf("run (slot %d)\t\t: 0x%x\t   - 0x%x\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE);
+    printf("mmio (slot %d)\t\t: 0x%x - 0x%x\n", MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE);
+    printf("pt (slot %d)\t\t\t: 0x%x - 0x%x\n", MEM_SLOT_2, VM_MEM_PT_ADDR, VM_MEM_PT_ADDR+VM_MEM_PT_SIZE);
+    printf("measures (slot %d)\t: 0x%x - 0x%x\n", MEM_SLOT_3, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_ADDR+VM_MEM_MEASURES_SIZE);
+    printf("own (slot %d)\t\t: 0x%x - 0x%x\n", MEM_SLOT_4, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_ADDR+VM_MEM_OWNPAGES_SIZE);
+    printf("shared (slot %d)\t\t: 0x%x - 0x%x\n", MEM_SLOT_5, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_ADDR+VM_MEM_SHAREDPAGES_SIZE);
 
-    printf("VMM : initialize %d VMs and launch VMs thread\n\n", NUMBEROFROLE);
+//    printf("VMM : initialize %d VMs and launch VMs thread\n\n", NUMBEROFROLE);
     /* pretty name VMs */
     strncpy(vm[0].vm_name, "VM alice",  256);
     strncpy(vm[1].vm_name, "VM charlie",  256);

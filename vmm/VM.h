@@ -64,10 +64,13 @@
 #define PDE64_PRESENT 1
 #define PDE64_RW (1U << 1)
 #define PDE64_USER (1U << 2)
+#define PDE64_PWT (1U << 3)
+#define PDE64_PCD (1U << 4)
 #define PDE64_ACCESSED (1U << 5)
 #define PDE64_DIRTY (1U << 6)
 #define PDE64_PS (1U << 7)
 #define PDE64_G (1U << 8)
+#define PDE64_R (1U << 11)
 
 
 extern const unsigned char vm_alice[], vm_alice_end[];
@@ -80,6 +83,7 @@ typedef enum {
     MEM_SLOT_2,
     MEM_SLOT_3,
     MEM_SLOT_4,
+    MEM_SLOT_5,
     NUMBEROFSLOT
 } MEM_REGION;
 
