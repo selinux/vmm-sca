@@ -16,7 +16,6 @@
  * =====================================================================================
  */
 #include <stdio.h>
-#include <unistd.h>
 #include <sys/ioctl.h>
 #include <string.h>
 #include <stdint.h>
@@ -59,6 +58,9 @@ void *run_vm(void * ptr)
                 if(vm->vcpu.kvm_run->mmio.is_write)
                     printf("at least !!\n");
                 continue;
+            case KVM_EXIT_SHUTDOWN:
+                ret = 0;
+                goto check;
 
             case KVM_EXIT_IO:
                 if (vm->vcpu.kvm_run->io.direction == KVM_EXIT_IO_OUT
@@ -75,10 +77,10 @@ void *run_vm(void * ptr)
                     long long unsigned *m = (long long unsigned *)vm->mem_measures;
 //                    char *m = (char *)vm->mem_run+0x10000;
                     for(int i=0; i< NB_SAMPLES; i++){
-//                        unsigned long long dm = *(unsigned long long *)m-*(unsigned long long *)(m-1);
-//                        if(dm < 48000000)
-//                            printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *(unsigned long long *)m, dm);
-                        printf("%s (%04d) : %llu\n", vm->vm_name, i, *(unsigned long long *)m);
+                        unsigned long long dm = *(unsigned long long *)m-*(unsigned long long *)(m-1);
+                        if(dm < 48000000)
+                            printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *(unsigned long long *)m, dm);
+//                        printf("%s (%04d) : %llu\n", vm->vm_name, i, *(unsigned long long *)m);
 //                        printf("%s (%04d) : %c\n", vm->vm_name, i, *m);
                         m++;
                    }
@@ -91,7 +93,7 @@ void *run_vm(void * ptr)
                 fprintf(stderr,	"Got exit_reason %d,"
                                    " expected KVM_EXIT_HLT (%d)\n",
         			vm->vcpu.kvm_run->exit_reason, KVM_EXIT_HLT);
-		        ret = vm->vcpu.kvm_run->exit_reason;
+		        ret = (int)vm->vcpu.kvm_run->exit_reason;
         }
 	}
 
@@ -124,9 +126,7 @@ void *time_master(void * ptr)
 
     printf("time master : waiting KSM memory deduplication...\n");
 
-    if(NUMBEROFROLE > 1){
-        ksm_wait(NB_SHARED_PAGES);
-    }
+    ksm_wait(NB_SHARED_PAGES);
 
     pthread_barrier_wait (&barrier);
     printf("time master : running...\n");

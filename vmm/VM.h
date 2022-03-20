@@ -58,6 +58,9 @@
 #define EFER_LME (1U << 8)
 #define EFER_LMA (1U << 10)
 #define EFER_NXE (1U << 11)
+#define EFER_SVME (1U << 12)
+#define EFER_LMSLE (1U << 13)
+#define EFER_TCE (1U << 15)
 
 
 /* 64-bit page.img * entry bits */
@@ -71,6 +74,56 @@
 #define PDE64_PS (1U << 7)
 #define PDE64_G (1U << 8)
 #define PDE64_R (1U << 11)
+
+/*
+ * kvm define from git://git.kernel.org/pub/scm/virt/kvm/kvm.git
+ */
+// #define KVM_EXIT_TRACE "kvm:kvm_exit"
+// #define KVM_EXIT_REASON "exit_reason"
+// #define KVM_EXIT_TRACE "kvm:kvm_s390_sie_exit"
+// #define KVM_EXIT_REASON "icptcode"
+// #define KVM_EXIT_HYPERV_SYNIC          1
+// #define KVM_EXIT_HYPERV_HCALL          2
+// #define KVM_EXIT_HYPERV_SYNDBG         3
+// #define KVM_EXIT_XEN_HCALL          1
+// #define KVM_EXIT_UNKNOWN          0
+// #define KVM_EXIT_EXCEPTION        1
+// #define KVM_EXIT_IO               2
+// #define KVM_EXIT_HYPERCALL        3
+// #define KVM_EXIT_DEBUG            4
+// #define KVM_EXIT_HLT              5
+// #define KVM_EXIT_MMIO             6
+// #define KVM_EXIT_IRQ_WINDOW_OPEN  7
+// #define KVM_EXIT_SHUTDOWN         8
+// #define KVM_EXIT_FAIL_ENTRY       9
+// #define KVM_EXIT_INTR             10
+// #define KVM_EXIT_SET_TPR          11
+// #define KVM_EXIT_TPR_ACCESS       12
+// #define KVM_EXIT_S390_SIEIC       13
+// #define KVM_EXIT_S390_RESET       14
+// #define KVM_EXIT_DCR              15 /* deprecated */
+// #define KVM_EXIT_NMI              16
+// #define KVM_EXIT_INTERNAL_ERROR   17
+// #define KVM_EXIT_OSI              18
+// #define KVM_EXIT_PAPR_HCALL       19
+// #define KVM_EXIT_S390_UCONTROL    20
+// #define KVM_EXIT_WATCHDOG         21
+// #define KVM_EXIT_S390_TSCH        22
+// #define KVM_EXIT_EPR              23
+// #define KVM_EXIT_SYSTEM_EVENT     24
+// #define KVM_EXIT_S390_STSI        25
+// #define KVM_EXIT_IOAPIC_EOI       26
+// #define KVM_EXIT_HYPERV           27
+// #define KVM_EXIT_ARM_NISV         28
+// #define KVM_EXIT_X86_RDMSR        29
+// #define KVM_EXIT_X86_WRMSR        30
+// #define KVM_EXIT_DIRTY_RING_FULL  31
+// #define KVM_EXIT_AP_RESET_HOLD    32
+// #define KVM_EXIT_X86_BUS_LOCK     33
+// #define KVM_EXIT_XEN              34
+// #define KVM_EXIT_RISCV_SBI        35
+// #define KVM_EXIT_IO_IN  0
+// #define KVM_EXIT_IO_OUT 1
 
 
 extern const unsigned char vm_alice[], vm_alice_end[];
@@ -88,8 +141,8 @@ typedef enum {
 } MEM_REGION;
 
 
-void vm_init(vm* vm, const int vcpu_mmap_size, const char * shared_pages);
-void translate_vm_addr(vm* vm, const long long unsigned int addr);
+void vm_init(vm* vm, const char * shared_pages);
+struct kvm_translation translate_vm_addr(vm* vm, long long unsigned int addr);
 char * vm_role(ROLE r);
 
 #endif

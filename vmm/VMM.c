@@ -17,11 +17,8 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <fcntl.h>
-#include <errno.h>
 #include <sys/ioctl.h>
-#include <sys/mman.h>
 #include <string.h>
 #include <stdint.h>
 #include <linux/kvm.h>
@@ -119,7 +116,7 @@ int main(int argc, char ** argv)
     if (vcpu_mmap_size < (int)sizeof(struct kvm_run)) { perror("KVM_GET_VCPU_MMAP_SIZE unexpectedly small"); exit(1);}
 
     /* init VMM pages to be transferred to VMs */
-    printf("VMM : filled %d pages with random data to be shared between VMs\n", NB_SHARED_PAGES);
+    printf("VMM : filled %lld pages with random data to be shared between VMs\n", NB_SHARED_PAGES);
     char * shared_page_1 = NULL;
     err = init_shared_pages(&shared_page_1, NB_SHARED_PAGES);
     if (err < 0 ) { perror("failed to init buffer"); exit(EXIT_FAILURE);}
@@ -135,13 +132,13 @@ int main(int argc, char ** argv)
     printf("run (slot %d) : 0x%x (0x%x)\nmmio (slot %d) : 0x%x (0x%x)\nmeasures (slot %d) : 0x%x (0x%x)\nown (slot %d) : 0x%x (0x%x)\nshared (slot %d) : 0x%x (0x%x)\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_SIZE,
            MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_SIZE, MEM_SLOT_2, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_SIZE,
            MEM_SLOT_3, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE, MEM_SLOT_4, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE);
+    printf("run (slot %d)\t\t: 0x%llx\t   - 0x%llx\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE);
+    printf("mmio (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE);
+    printf("pt (slot %d)\t\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_2, VM_MEM_PT_ADDR, VM_MEM_PT_ADDR+VM_MEM_PT_SIZE);
+    printf("measures (slot %d)\t: 0x%llx - 0x%llx\n", MEM_SLOT_3, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_ADDR+VM_MEM_MEASURES_SIZE);
+    printf("own (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_4, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_ADDR+VM_MEM_OWNPAGES_SIZE);
+    printf("shared (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_5, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_ADDR+VM_MEM_SHAREDPAGES_SIZE);
 #endif
-    printf("run (slot %d)\t\t: 0x%x\t   - 0x%x\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE);
-    printf("mmio (slot %d)\t\t: 0x%x - 0x%x\n", MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE);
-    printf("pt (slot %d)\t\t\t: 0x%x - 0x%x\n", MEM_SLOT_2, VM_MEM_PT_ADDR, VM_MEM_PT_ADDR+VM_MEM_PT_SIZE);
-    printf("measures (slot %d)\t: 0x%x - 0x%x\n", MEM_SLOT_3, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_ADDR+VM_MEM_MEASURES_SIZE);
-    printf("own (slot %d)\t\t: 0x%x - 0x%x\n", MEM_SLOT_4, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_ADDR+VM_MEM_OWNPAGES_SIZE);
-    printf("shared (slot %d)\t\t: 0x%x - 0x%x\n", MEM_SLOT_5, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_ADDR+VM_MEM_SHAREDPAGES_SIZE);
 
 //    printf("VMM : initialize %d VMs and launch VMs thread\n\n", NUMBEROFROLE);
     /* pretty name VMs */
@@ -158,13 +155,10 @@ int main(int argc, char ** argv)
     /* launch VMs threads */
     for( int i = 0; i < NUMBEROFROLE; i++) {
         vm[i].fd_vm = ioctl(vmm, KVM_CREATE_VM, 0);
-        if (vm[i].fd_vm < 0) {
-            perror("KVM_CREATE_VM");
-            exit(1);
-        }
-
+        if (vm[i].fd_vm < 0) { perror("KVM_CREATE_VM"); exit(1);}
+        vm[i].vcpu_mmap_size = vcpu_mmap_size;
         /* init VM, vcpu, registers and memory regions */
-        vm_init((vm + i), vcpu_mmap_size, shared_page_1);
+        vm_init((vm + i), shared_page_1);
 
         /* launch VM */
         err = pthread_create( &tid[i], NULL, run_vm, (void*) (vm+i));

@@ -26,9 +26,10 @@ struct vcpu {
     struct kvm_run *kvm_run;
 };
 
-typedef struct _vm {
+typedef struct my_vm {
     char vm_name[256];
     ROLE vm_role;
+    uint32_t vcpu_mmap_size;
     int fd_vm;
     int fd_vcpu;
     struct vcpu vcpu;
