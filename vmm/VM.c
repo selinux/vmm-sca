@@ -29,34 +29,13 @@
 #include "VM.h"
 
 
-//#define OLD_PML4
-
-/** Initialize PML4 pages tables
+/** Initialize paging PML4 pages tables in VM memory
  *
  * @param vm
  */
 static void init_pages_tables(vm* vm){
-#ifdef OLD_PML4
-    uint64_t pml4_addr = 0x2000;
-	uint64_t *pml4 = (void *)(vm->mem_run + pml4_addr);
 
-	uint64_t pdpt_addr = 0x3000;
-	uint64_t *pdpt = (void *)(vm->mem_run + pdpt_addr);
-
-	uint64_t pd_addr = 0x4000;
-	uint64_t *pd = (void *)(vm->mem_run + pd_addr);
-
-//    uint64_t pt_addr = 0x5000;
-//    uint64_t *pt = (void *)(vm->mem_run + pd_addr);
-
-    pml4[0] = PDE64_PRESENT | PDE64_RW | pdpt_addr;
-	pdpt[0] = PDE64_PRESENT | PDE64_RW | pd_addr;
-    pdpt[1] = PDE64_PRESENT | PDE64_RW | (pd_addr+(0x1000ll));
-    for(int i = 0; i < 2*512; i++) {
-        pd[i] = PDE64_PRESENT | PDE64_RW | PDE64_PS | (0x200000*i);  // page size 2Mb
-    }
-#else
-    //    /* https://wiki.osdev.org/Paging */
+    /* page table ref : https://wiki.osdev.org/Paging */
     printf("%s (%s) : init memory paging  (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* page map level 4 */
@@ -66,28 +45,27 @@ static void init_pages_tables(vm* vm){
     uint64_t *pdpt = (uint64_t *)(vm->mem_pages_tables + 0x1000);
 
     /* page directory table (512*2Mb = 1Gb) */
-    uint64_t *pd = (uint64_t *)(vm->mem_pages_tables + 0x2000);     // add loop to map more than the first 1Gb
-    uint64_t *pte = (uint64_t *)(vm->mem_pages_tables+0x7000);
+    uint64_t *pd = (uint64_t *)(vm->mem_pages_tables + 0x2000);
+    uint64_t *pte = (uint64_t *)(vm->mem_pages_tables+0x3000+(NB_PT_PD_PAGES*PAGESIZE));
 
     /* PML4 entry (1 PDPT) */
     pml4[0] = PDE64_PRESENT | PDE64_RW | (VM_MEM_PT_ADDR+0x1000LL);
-    /* PDPT entries (1 PDPT) */
+    /* PDPT entries (4 PD) */
     for(uint64_t i = 0; i < NB_PT_PD_PAGES; i++) {
         pdpt[i] = PDE64_PRESENT | PDE64_RW | (VM_MEM_PT_ADDR+0x2000LL+(i*PAGESIZE));
     }
-    /* PD entries (2*512 PT) */
+    /* PD entries (4*512 PT) */
     for(uint64_t i = 0; i < NB_PT_PD_PAGES*512; i++) {
-        pd[i] = PDE64_PRESENT | PDE64_RW | (VM_MEM_PT_ADDR+0x7000LL+(i*PAGESIZE));
+        pd[i] = PDE64_PRESENT | PDE64_RW | (VM_MEM_PT_ADDR+0x3000LL+(NB_PT_PD_PAGES*PAGESIZE)+(i*PAGESIZE));
     }
     /* PT entries identity mapping */
     for(uint64_t i = 0; i < NB_PT_PD_PAGES*512*512; i++){
         pte[i] = PDE64_PRESENT | PDE64_RW | (i * PAGESIZE);
     }
-#endif
 }
 
 
-/** Initialize vcpu long mode (64bits)
+/** Initialize vcpu long mode (64bits) with paging and PML4 in CR3
  *
  * @param vm
  * @param sregs vcpu control registers
@@ -95,18 +73,11 @@ static void init_pages_tables(vm* vm){
 static void init_long_mode(struct kvm_sregs *sregs)
 {
 
-//    printf("%s (%s) : init vcpu long mode (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
-
     /* init long mode (ref : https://en.wikipedia.org/wiki/Control_register#CR0) */
-//    sregs->cr0 = CR0_PE | CR0_MP | CR0_ET | CR0_NE | CR0_WP | CR0_AM |CR0_PG;                    // CR0 : flags
-    sregs->cr0 = CR0_PE | CR0_PG;                    // CR0 : flags
-#ifdef OLD_PML4
-    sregs->cr3 = 0x2000;                                 // point to pml4 table
-#else
-    sregs->cr3 = VM_MEM_PT_ADDR;                                 // point to pml4 table
-#endif
-//    sregs->cr4 = CR4_PAE | CR4_PGE | CR4_PCE | CR4_OSFXSR | CR4_OSXMMEXCPT;     // TSD : If set, RDTSC instruction can only be executed when in ring 0
-    sregs->cr4 = CR4_PAE;     // TSD : If set, RDTSC instruction can only be executed when in ring 0
+
+    sregs->cr0 = CR0_PE | CR0_MP | CR0_ET | CR0_NE | CR0_WP | CR0_AM |CR0_PG;   // CR0 : flags
+    sregs->cr3 = VM_MEM_PT_ADDR;                                                // point to pml4 table
+    sregs->cr4 = CR4_PAE | CR4_PGE | CR4_PCE | CR4_OSFXSR | CR4_OSXMMEXCPT;     // TSD : If set, RDTSC instruction can only be executed when in ring 0
     sregs->efer = EFER_LME | EFER_LMA;                                          // PCE : Performance-Monitoring Counter enable
 }
 
@@ -116,8 +87,6 @@ static void init_long_mode(struct kvm_sregs *sregs)
  */
 static void init_segments(struct kvm_sregs *sregs)
 {
-//    printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
-
     /* In 64 bit, segemntation is not used for addressing but only used to know if
      * something is in user mode (ring 3) or kernel mode(ring 0). This is later been used for paging also.
      *
@@ -191,7 +160,9 @@ static void init_vcpu(vm * vm){
  */
 static int init_memory_slot(vm* vm, void* mem, MEM_REGION slot, __u32 flags, __u64 guest_pa, __u64 size){
 
+#ifdef DEBUG
     printf("%s (%s) : init memory slots (%d) - flag %d, gla 0x%llx, size 0x%llx - hva %p\n", vm->vm_name, vm_role(vm->vm_role), slot, flags, guest_pa, size, mem);
+#endif
    	struct kvm_userspace_memory_region memreg;
     memreg.slot = slot;
     memreg.flags = flags;
@@ -292,16 +263,16 @@ void vm_init(vm* vm, const char * shared_pages)
     while(_s < NB_OWN_PAGES*PAGESIZE) {
         _s += getrandom(vm->mem_own, (NB_OWN_PAGES*PAGESIZE) - _s, GRND_NONBLOCK);
     }
-//    printf("%s (%s) : fill %d pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
+    printf("%s (%s) : fill %lld pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
 
-    /* VMs shared pages for read access, flush, COW,... tests (attacker) */
+    /* VMs shared pages for read access, flush, COW,... tests */
     /* shared pages */
     vm->mem_shared = mmap(NULL, VM_MEM_SHAREDPAGES_SIZE, PROT_READ | PROT_WRITE,
                           MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (vm->mem_shared == MAP_FAILED) { perror("mmap shared pages region"); exit(1);}
     /* transfer shared pages data */
     memcpy(vm->mem_shared, shared_pages, NB_SHARED_PAGES*PAGESIZE);
-//    printf("%s (%s) : transferred %d shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
+    printf("%s (%s) : transferred %lld shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
 
     /* initialize and attach memory region to VM */
     madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_UNMERGEABLE);
@@ -331,9 +302,11 @@ void vm_init(vm* vm, const char * shared_pages)
 
     /* init 64bits long mode */
     init_long_mode(&sregs);
+    printf("%s (%s) : init vcpu long mode (64-bit) with paging (4Gb identity mapped)\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* init segments */
     init_segments(&sregs);
+    printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* set special registers */
     if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
@@ -342,38 +315,21 @@ void vm_init(vm* vm, const char * shared_pages)
     struct kvm_regs regs;
     init_registers(&regs);
     if (ioctl(vm->fd_vcpu, KVM_SET_REGS, &regs) < 0) { perror("KVM_SET_REGS"); exit(1);}
+    printf("%s (%s) : init vcpu registers (rip,rsp)\n", vm->vm_name, vm_role(vm->vm_role));
 
     struct kvm_mp_state mp_state;
     if (ioctl(vm->fd_vcpu, KVM_GET_MP_STATE, &mp_state) < 0) { perror("KVM_GET_MP_STATE"); exit(1);}
-    printf("%s (%s) : vcpu state %d\n", vm->vm_name, vm_role(vm->vm_role), mp_state.mp_state);
 
-//    printf("%s (%s) : init vcpu registers (rip,rsp)\n", vm->vm_name, vm_role(vm->vm_role));
 
-//#ifdef DEBUG
-    struct kvm_translation trans;
-    trans = translate_vm_addr(vm, (long long unsigned int) VM_MEM_RUN_ADDR+0xfff);
-    printf("translation gpa %p - valid %d\n", (void *)trans.physical_address, trans.valid);
-    translate_vm_addr(vm, (uint64_t) VM_MEM_RUN_ADDR+0x1f0000);
-    trans = translate_vm_addr(vm, (uint64_t) VM_MEM_MMIO_ADDR);
-    printf("translation gpa %p - valid %d\n", (void *)trans.physical_address, trans.valid);
-    trans = translate_vm_addr(vm, (uint64_t) VM_MEM_PT_ADDR);
-    printf("translation gpa %p - valid %d\n", (void *)trans.physical_address, trans.valid);
-    translate_vm_addr(vm, (uint64_t) VM_MEM_MEASURES_ADDR);
-    translate_vm_addr(vm, (uint64_t) VM_MEM_OWNPAGES_ADDR);
-    translate_vm_addr(vm, (uint64_t) VM_MEM_SHAREDPAGES_ADDR);
-    translate_vm_addr(vm, 0x40001000LL);
-    translate_vm_addr(vm, 0x80000000LL-1);
-    translate_vm_addr(vm, 0xc0000000LL-1);
-    translate_vm_addr(vm, 0x100000000LL-1);
-    translate_vm_addr(vm, 0x100001000LL);
-//    translate_vm_addr(vm, (uint64_t) vm->mem_pages_tables+0x1000);
-//#endif
+    assert(VM_MEM_MEASURES_ADDR == translate_vm_addr(vm, (uint64_t) VM_MEM_MEASURES_ADDR).physical_address);
+    assert(VM_MEM_OWNPAGES_ADDR == translate_vm_addr(vm, (uint64_t) VM_MEM_OWNPAGES_ADDR).physical_address);
+    assert(VM_MEM_SHAREDPAGES_ADDR == translate_vm_addr(vm, (uint64_t) VM_MEM_SHAREDPAGES_ADDR).physical_address);
+    assert(1 != translate_vm_addr(vm, 0x100000000LL).valid);   // memory over 4Gb is not valid
 
 
     /* print TSC frequency from guest pov */
     int tsc_freq = ioctl(vm->fd_vcpu, KVM_GET_TSC_KHZ, 0);
     printf("%s : TSC %d MHz\n", vm->vm_name, tsc_freq/1000);
-//    exit(0);
 }
 
 
@@ -387,10 +343,10 @@ struct kvm_translation translate_vm_addr(vm* vm, const long long unsigned int ad
     struct kvm_translation trans_addr;
     trans_addr.linear_address = addr;
     if (ioctl(vm->fd_vcpu, KVM_TRANSLATE, &trans_addr) < 0) { perror("KVM_TRANSLATION_ADDR"); exit(1);}
-
+#ifdef DEBUG
     printf("linear_addr : 0x%llx\ntranslated_addr : 0x%llx\n", addr, trans_addr.physical_address);
     printf("valid\t : %hhx\nwritable : %hhx\nusermode : %hhx\n", trans_addr.valid, trans_addr.writeable, trans_addr.usermode);
-
+#endif
     return trans_addr;
 }
 

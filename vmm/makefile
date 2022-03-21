@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS =-g -lpthread -fsanitize=address -O3
-WFLAGS=-Wall -Wextra # -Werror
+WFLAGS=-Wall -Wextra -Werror
 DEBUG=-g
 ARCH=-m64
 OPTS=$(CFLAGS) $(WFLAGS) $(ARCH) $(DEBUG)

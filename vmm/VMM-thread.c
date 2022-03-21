@@ -74,14 +74,10 @@ void *run_vm(void * ptr)
                        && vm->vcpu.kvm_run->io.port == PMIO_PRINT_MEASURES) {
                     printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
 
-                    long long unsigned *m = (long long unsigned *)vm->mem_measures;
-//                    char *m = (char *)vm->mem_run+0x10000;
-                    for(int i=0; i< NB_SAMPLES; i++){
-                        unsigned long long dm = *(unsigned long long *)m-*(unsigned long long *)(m-1);
-                        if(dm < 48000000)
-                            printf("%s (%04d) : %llu (Δ %llu)\n", vm->vm_name, i, *(unsigned long long *)m, dm);
-//                        printf("%s (%04d) : %llu\n", vm->vm_name, i, *(unsigned long long *)m);
-//                        printf("%s (%04d) : %c\n", vm->vm_name, i, *m);
+                    uint64_t *m = (uint64_t *)vm->mem_measures+1;  // skip first measure
+                    for(int i=1; i< NB_SAMPLES; i++){
+                        uint64_t dm = *(uint64_t *)m-*(uint64_t *)(m-1);
+                        printf("%s (%04d) : %lu (Δ %lu)\n", vm->vm_name, i, *(uint64_t *)m, dm);
                         m++;
                    }
                 }

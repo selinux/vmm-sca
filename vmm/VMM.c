@@ -93,7 +93,7 @@ int main(int argc, char ** argv)
     vm vm[NUMBEROFROLE];            // VMs
     pthread_t tid[NUMBEROFROLE];    // VMs thread controller
     pthread_t tm;                   // thread time master
-    void * iret[NUMBEROFROLE];      // threads return satus
+    void *iret[NUMBEROFROLE];      // threads return satus
     int vcpu_mmap_size;             // mmap size
     int err;
 
@@ -121,26 +121,8 @@ int main(int argc, char ** argv)
     err = init_shared_pages(&shared_page_1, NB_SHARED_PAGES);
     if (err < 0 ) { perror("failed to init buffer"); exit(EXIT_FAILURE);}
 
-#ifdef DEBUG
-    int nb_slot;
-    nb_slot =  ioctl(vmm, KVM_CHECK_EXTENSION, KVM_CAP_NR_MEMSLOTS);
-//    if (nb_slot < 0) {
-//		printf("failed to get slot count (%s)\n", strerror(errno));
-//	} else {
-//        printf("bb of memory slots available : %u\n", nb_slot);
-//    }
-    printf("run (slot %d) : 0x%x (0x%x)\nmmio (slot %d) : 0x%x (0x%x)\nmeasures (slot %d) : 0x%x (0x%x)\nown (slot %d) : 0x%x (0x%x)\nshared (slot %d) : 0x%x (0x%x)\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_SIZE,
-           MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_SIZE, MEM_SLOT_2, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_SIZE,
-           MEM_SLOT_3, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE, MEM_SLOT_4, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE);
-    printf("run (slot %d)\t\t: 0x%llx\t   - 0x%llx\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE);
-    printf("mmio (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE);
-    printf("pt (slot %d)\t\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_2, VM_MEM_PT_ADDR, VM_MEM_PT_ADDR+VM_MEM_PT_SIZE);
-    printf("measures (slot %d)\t: 0x%llx - 0x%llx\n", MEM_SLOT_3, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_ADDR+VM_MEM_MEASURES_SIZE);
-    printf("own (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_4, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_ADDR+VM_MEM_OWNPAGES_SIZE);
-    printf("shared (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_5, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_ADDR+VM_MEM_SHAREDPAGES_SIZE);
-#endif
+    printf("VMM : %d VMs initialized...launch VMs threads\n\n", NUMBEROFROLE);
 
-//    printf("VMM : initialize %d VMs and launch VMs thread\n\n", NUMBEROFROLE);
     /* pretty name VMs */
     strncpy(vm[0].vm_name, "VM alice",  256);
     strncpy(vm[1].vm_name, "VM charlie",  256);
@@ -171,7 +153,7 @@ int main(int argc, char ** argv)
     /* join */
     for( int i = 0; i < NUMBEROFROLE; i++) {
         pthread_join(tid[i], &iret[i]);
-        printf("%s : exit %d\n", vm[i].vm_name, *(int*)iret[i]);
+        printf("%s : exit\n", vm[i].vm_name);
     }
     void *ret_tm = NULL;
     pthread_join(tm, ret_tm);
