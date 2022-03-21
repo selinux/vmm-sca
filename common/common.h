@@ -21,7 +21,7 @@
 #define NB_PT_PD_PAGES          (0x2LL)                               // 2*512*2Mb = 2Gb
 #define NB_PTE_PAGES            (NB_PT_PD_PAGES*512LL)                // 1024*2Mb
 #define VM_MEM_PT_ADDR          (VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE)
-#define VM_MEM_PT_SIZE          ((NB_PT_PML4_PAGES+NB_PT_PDPT_PAGES+NB_PT_PD_PAGES+NB_PTE_PAGES)*PAGESIZE)
+#define VM_MEM_PT_SIZE          ((NB_PT_PML4_PAGES+NB_PT_PDPT_PAGES+NB_PT_PD_PAGES+NB_PTE_PAGES+1)*PAGESIZE)
 
 #define NB_SAMPLES              (0x10LL)
 #define VM_MEM_MEASURES_ADDR    (VM_MEM_PT_ADDR+VM_MEM_PT_SIZE)

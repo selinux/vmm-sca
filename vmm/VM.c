@@ -71,7 +71,7 @@ static void init_pages_tables(vm* vm){
 
     /* PML4 entry (1 PDPT) */
     pml4[0] = PDE64_PRESENT | PDE64_RW | (VM_MEM_PT_ADDR+0x1000LL);
-    /* PDPT entries (2 PD) */
+    /* PDPT entries (1 PDPT) */
     for(uint64_t i = 0; i < NB_PT_PD_PAGES; i++) {
         pdpt[i] = PDE64_PRESENT | PDE64_RW | (VM_MEM_PT_ADDR+0x2000LL+(i*PAGESIZE));
     }
@@ -361,6 +361,12 @@ void vm_init(vm* vm, const char * shared_pages)
     translate_vm_addr(vm, (uint64_t) VM_MEM_MEASURES_ADDR);
     translate_vm_addr(vm, (uint64_t) VM_MEM_OWNPAGES_ADDR);
     translate_vm_addr(vm, (uint64_t) VM_MEM_SHAREDPAGES_ADDR);
+    translate_vm_addr(vm, 0x40001000LL);
+    translate_vm_addr(vm, 0x80000000LL-0x2001);
+    translate_vm_addr(vm, 0x80000000LL-0x1001);
+    translate_vm_addr(vm, 0x80000000LL-1);
+    translate_vm_addr(vm, 0x80000000LL);
+    translate_vm_addr(vm, 0x80001000LL);
 //    translate_vm_addr(vm, (uint64_t) vm->mem_pages_tables+0x1000);
 //#endif
 
