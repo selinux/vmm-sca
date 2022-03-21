@@ -22,23 +22,53 @@
 #include "../common/common.h"
 #include "vm_common.h"
 
+//static inline uint8_t inb(uint16_t port)
+//{
+//    uint8_t ret;
+//    asm volatile ( "inb %1, %0"
+//    : "=a"(ret)
+//    : "Nd"(port) );
+//    return ret;
+//}
+//uint8_t inb(uint16_t port)
+//{
+//    uint8_t ret;
+//    asm volatile ( "inb %1, %0"
+//                   : "=a"(ret)
+//                   : "Nd"(port) );
+//    return ret;
+//}
+
 void
 __attribute__((noreturn))
 __attribute__((section(".start")))
 _start(void) {
 
-//    long long unsigned *measures = (void *)0x10000;
-//    char *measures = (char *)0x10000;
-//    for(int i=0; i< NB_SAMPLES;i++){
-//        *(measures+i) = 'G';
-//        *(measures++) = __rdtsc();
-//    }
 
-//    unsigned long* test_mmio = (void *)VM_MEM_MEASURES_ADDR+0x0;
-    for(int i=0; i < VM_MEM_MEASURES_SIZE; i += 0x100) {
-//        *(test_mmio + i) = 0xa5a5a5a5;
+
+    /* MMIO */
+    *(uint8_t *)(VM_MEM_MMIO_ADDR)  = 0xbe;
+    *(uint16_t *)(VM_MEM_MMIO_ADDR) = 0xbeaf;
+    *(uint32_t *)(VM_MEM_MMIO_ADDR) = 0xdeadbeef;
+    *(uint64_t *)(VM_MEM_MMIO_ADDR) = 0xdeadbeefabdab00f;
+
+    /* PMIO */
+    uint8_t c = inb(PMIO_READ);
+    uint16_t w = inw(PMIO_READ);
+    uint32_t l = inl(PMIO_READ);
+    outb(0xffaa, 0xab);
+    outw(0xffab, 0xafaf);
+    outl(0xffac, 0xafafbeef);
+
+//    const char *p;
+//    for (p = "Hello, world!\n"; *p; ++p)
+//        outb(0xE9, *p);
+    /* measure */
+    static long long unsigned *measures = (void *)VM_MEM_MEASURES_ADDR;
+    for(int i=0; i< NB_SAMPLES;i++){
+        *(measures++) = __rdtsc();
     }
-//    print_measures();
+    print_measures();
 
     for(;;)
         exit_halt();

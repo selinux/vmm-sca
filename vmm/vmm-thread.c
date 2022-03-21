@@ -27,6 +27,7 @@
 
 #include "ksm.h"
 #include "vm.h"
+#include "vmm-handlers.h"
 
 
 extern pthread_barrier_t   barrier; // wait until all VMs are started
@@ -53,46 +54,19 @@ void *run_vm(void * ptr)
             case KVM_EXIT_HLT:
                 ret = 0;
                 goto check;
-
             case KVM_EXIT_MMIO:
-                if(vm->vcpu.kvm_run->mmio.is_write)
-                    printf("at least MMIO write !!\n");
-                else {
-                    printf("at least MMIO read exit!!\n");
-                }
+                handle_mmio(vm);
                 continue;
             case KVM_EXIT_SHUTDOWN:
                 ret = 0;
                 goto check;
-
             case KVM_EXIT_IO:
-                if (vm->vcpu.kvm_run->io.direction == KVM_EXIT_IO_OUT
-                       && vm->vcpu.kvm_run->io.port == 0xE9) {
-                    char *p = (char *)vm->vcpu.kvm_run;
-        		    fwrite(p + vm->vcpu.kvm_run->io.data_offset,
-    			      vm->vcpu.kvm_run->io.size, 1, stdout);
-	        	    fflush(stdout);
-                    continue;}
-                if (vm->vcpu.kvm_run->io.direction == KVM_EXIT_IO_OUT
-                       && vm->vcpu.kvm_run->io.port == PMIO_PRINT_MEASURES) {
-                    printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
-
-                    uint64_t *m = (uint64_t *)vm->mem_measures+1;  // skip first measure
-                    for(int i=1; i< NB_SAMPLES; i++){
-                        uint64_t dm = *(uint64_t *)m-*(uint64_t *)(m-1);
-                        printf("%s (%04d) : %lu (Δ %lu)\n", vm->vm_name, i, *(uint64_t *)m, dm);
-                        m++;
-                   }
-                }
-
+                handle_pmio(vm);
                 continue;
-
             /* fall through */
             default:
-                fprintf(stderr,	"Got exit_reason %d,"
-                                   " expected KVM_EXIT_HLT (%d)\n",
-        			vm->vcpu.kvm_run->exit_reason, KVM_EXIT_HLT);
-		        ret = (int)vm->vcpu.kvm_run->exit_reason;
+                fprintf(stderr,	"Got exit_reason %d, expected KVM_EXIT_HLT (%d)\n", vm->vcpu.kvm_run->exit_reason, KVM_EXIT_HLT);
+                ret = (int)vm->vcpu.kvm_run->exit_reason;
         }
 	}
 

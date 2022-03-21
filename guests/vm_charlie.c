@@ -28,15 +28,11 @@ __attribute__((noreturn))
 __attribute__((section(".start")))
 _start(void) {
 
-//    uint64_t *measures = (uint64_t *)VM_MEM_MEASURES_ADDR;
-
-//    for(int i=0; i< NB_SAMPLES/2;i++){
+//    static long long unsigned *measures = (void *)VM_MEM_MEASURES_ADDR;
+//    for(int i=0; i< NB_SAMPLES;i++){
 //        *(measures++) = __rdtsc();
-//        outb(0xE9, ' ');
 //    }
-
 //    print_measures();
-    myloop();
 
     for(;;)
         exit_halt();

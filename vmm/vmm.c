@@ -37,7 +37,6 @@
 pthread_barrier_t   barrier; // wait until all VMs are started
 
 
-
 /** initialize KVM
  *
  * @param vmm fd

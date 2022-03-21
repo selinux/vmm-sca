@@ -36,6 +36,7 @@
 #define VM_MEM_SHAREDPAGES_SIZE (PAGES2SIZE(NB_SHARED_PAGES))
 
 #define PMIO_PRINT_MEASURES         0xABBA
+#define PMIO_READ                   0xABCA
 #define VM_EXIT_RETURN_CODE         42
 #define VM_EXIT_RETURN_CODE_ADDR    (0x400)
 

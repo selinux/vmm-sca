@@ -142,8 +142,7 @@ static void init_vcpu(vm * vm){
 //    printf("%s (%s) : create vcpu\n", vm->vm_name, vm_role(vm->vm_role));
     vm->fd_vcpu = ioctl(vm->fd_vm, KVM_CREATE_VCPU, 0);
     if (vm->fd_vcpu < 0) { perror("KVM_CREATE_VCPU"); exit(1);}
-    vm->vcpu.kvm_run = mmap(NULL, vm->vcpu_mmap_size, PROT_READ | PROT_WRITE,
-                            MAP_SHARED, vm->fd_vcpu, 0);
+    vm->vcpu.kvm_run = mmap(NULL, (size_t)vm->vcpu_mmap_size, PROT_READ | PROT_WRITE,MAP_SHARED, vm->fd_vcpu, 0);
     if (vm->vcpu.kvm_run == MAP_FAILED) { perror("mmap kvm_run"); exit(1); }
 }
 
