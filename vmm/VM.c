@@ -67,7 +67,7 @@ static void init_pages_tables(vm* vm){
 
     /* page directory table (512*2Mb = 1Gb) */
     uint64_t *pd = (uint64_t *)(vm->mem_pages_tables + 0x2000);     // add loop to map more than the first 1Gb
-    uint64_t *pte = (uint64_t *)(vm->mem_pages_tables+0x5000);
+    uint64_t *pte = (uint64_t *)(vm->mem_pages_tables+0x7000);
 
     /* PML4 entry (1 PDPT) */
     pml4[0] = PDE64_PRESENT | PDE64_RW | (VM_MEM_PT_ADDR+0x1000LL);
@@ -77,7 +77,7 @@ static void init_pages_tables(vm* vm){
     }
     /* PD entries (2*512 PT) */
     for(uint64_t i = 0; i < NB_PT_PD_PAGES*512; i++) {
-        pd[i] = PDE64_PRESENT | PDE64_RW | (VM_MEM_PT_ADDR+0x5000LL+(i*PAGESIZE));
+        pd[i] = PDE64_PRESENT | PDE64_RW | (VM_MEM_PT_ADDR+0x7000LL+(i*PAGESIZE));
     }
     /* PT entries identity mapping */
     for(uint64_t i = 0; i < NB_PT_PD_PAGES*512*512; i++){
@@ -362,11 +362,10 @@ void vm_init(vm* vm, const char * shared_pages)
     translate_vm_addr(vm, (uint64_t) VM_MEM_OWNPAGES_ADDR);
     translate_vm_addr(vm, (uint64_t) VM_MEM_SHAREDPAGES_ADDR);
     translate_vm_addr(vm, 0x40001000LL);
-    translate_vm_addr(vm, 0x80000000LL-0x2001);
-    translate_vm_addr(vm, 0x80000000LL-0x1001);
     translate_vm_addr(vm, 0x80000000LL-1);
-    translate_vm_addr(vm, 0x80000000LL);
-    translate_vm_addr(vm, 0x80001000LL);
+    translate_vm_addr(vm, 0xc0000000LL-1);
+    translate_vm_addr(vm, 0x100000000LL-1);
+    translate_vm_addr(vm, 0x100001000LL);
 //    translate_vm_addr(vm, (uint64_t) vm->mem_pages_tables+0x1000);
 //#endif
 
