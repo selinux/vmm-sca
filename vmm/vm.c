@@ -29,6 +29,80 @@
 #include "vm.h"
 
 
+
+
+static gdt_entry_t build_entry(uint32_t base, uint32_t limit, uint8_t type, uint8_t s, uint8_t db, uint8_t granularity, uint8_t dpl) {
+    gdt_entry_t entry;
+    // For a TSS and LDT, base is the addresse of the TSS/LDT structure
+    // and limit is the size of the structure.
+    entry.lim15_0 = limit & 0xffff;
+    entry.base15_0 = base & 0xffff;
+    entry.base23_16 = (base >> 16) & 0xff;
+    entry.type = type;  // See TYPE_xxx flags
+    entry.s = s;        // 1 for segments; 0 for system (TSS, LDT, gates)
+    entry.dpl = dpl;    // privilege level
+    entry.present = 1;  // present in memory
+    entry.lim19_16 = (limit >> 16) & 0xf;
+    entry.avl = 0;      // available for use
+    entry.l = 0;        // should be 0 (64-bit code segment)
+    entry.db = db;      // 1 for 32-bit code and data segments; 0 for system (TSS, LDT, gate)
+    entry.granularity = granularity;  // granularity of the limit value: 0 = 1 byte; 1 = 4096 bytes
+    entry.base31_24 = (base >> 24) & 0xff;
+    return entry;
+}
+
+static idt_entry_t idt_build_entry(uint16_t selector, uint32_t offset, uint8_t type, uint8_t dpl) {
+    idt_entry_t entry;
+    entry.offset15_0 = offset & 0xffff;
+    entry.selector = selector;
+    entry.reserved = 0;
+    entry.type = type;
+    entry.dpl = dpl;
+    entry.p = 1;
+    entry.offset31_16 = (offset >> 16) & 0xffff;
+    return entry;
+}
+
+
+#define S_CODE_OR_DATA   1
+// For TSS segment, LDT, call gate, interrupt gate, trap gate, task gate
+#define S_SYSTEM   0
+// D/B bit
+#define DB_SEG  1
+#define DB_SYS  0
+
+/** Return a NULL GDT entry.
+ *
+ * @return
+ */
+gdt_entry_t gdt_make_null_segment() {
+	gdt_entry_t entry;
+	memset(&entry, 0, sizeof(gdt_entry_t));
+	return entry;
+}
+/** Return a code segment specified by the base, limit and privilege level passed in arguments.
+ *
+ * @param base
+ * @param limit
+ * @param dpl
+ * @return
+ */
+gdt_entry_t gdt_make_code_segment(uint32_t base, uint32_t limit, uint8_t dpl) {
+	return build_entry(base, limit, TYPE_CODE_EXECONLY, S_CODE_OR_DATA, DB_SEG, 1, dpl);
+}
+
+/** Return a read-write data segment specified by the base, limit and privilege level passed in arguments.
+ *
+ * @param base
+ * @param limit
+ * @param dpl
+ * @return
+ */
+gdt_entry_t gdt_make_data_segment(uint32_t base, uint32_t limit, uint8_t dpl) {
+	return build_entry(base, limit, TYPE_DATA_RW, S_CODE_OR_DATA, DB_SEG, 1, dpl);
+}
+
+
 /** Initialize paging PML4 pages tables in VM memory
  *
  * @param vm
@@ -117,6 +191,31 @@ static void init_segments(struct kvm_sregs *sregs)
 }
 
 
+/** Initialize GDT and IDT without handler VM will attach them later
+ *
+ * @param vm
+ * @param sregs
+ */
+static void init_gdt_idt(vm * vm, struct kvm_sregs *sregs){
+    struct kvm_dtable _gdt = {.base=VM_GDT_ADDR, .limit= VM_GDT_SIZE-1};
+    struct kvm_dtable _idt = {.base = VM_IDT_ADDR, .limit = VM_IDT_SIZE-1};
+    sregs->gdt = _gdt;
+    sregs->idt = _idt;
+
+    /* populate GDT with two entries */
+    gdt_entry_t *gdt_table = vm->mem_run + VM_GDT_ADDR;
+    gdt_table[0] = gdt_make_null_segment();
+    gdt_table[1] = gdt_make_code_segment(0x0, 0xFFFFFF, DPL_KERNEL);
+    gdt_table[2] = gdt_make_data_segment(0x0, 0xFFFFFF, DPL_KERNEL);
+
+    /* populate IDT without functions handler (guest will do) */
+    idt_entry_t *idt_table =  vm->mem_run + VM_IDT_ADDR;
+    for (int i = 0; i < 256; i++) {
+		idt_table[i] = idt_build_entry(GDT_KERNEL_CODE_SELECTOR, 0, TYPE_INTERRUPT_GATE, DPL_KERNEL);
+	}
+}
+
+
 /** Initialize vcpu registers
  *
  * @param regs vcpu registers
@@ -139,7 +238,6 @@ static void init_registers(struct kvm_regs * regs){
  */
 static void init_vcpu(vm * vm){
 
-//    printf("%s (%s) : create vcpu\n", vm->vm_name, vm_role(vm->vm_role));
     vm->fd_vcpu = ioctl(vm->fd_vm, KVM_CREATE_VCPU, 0);
     if (vm->fd_vcpu < 0) { perror("KVM_CREATE_VCPU"); exit(1);}
     vm->vcpu.kvm_run = mmap(NULL, (size_t)vm->vcpu_mmap_size, PROT_READ | PROT_WRITE,MAP_SHARED, vm->fd_vcpu, 0);
@@ -211,7 +309,6 @@ void vm_init(vm* vm, const char * shared_pages)
 
 //    if (ioctl(vm->fd_vm, KVM_SET_TSS_ADDR, 0xfffbd000) < 0) { perror("KVM_SET_TSS_ADDR"); exit(1);}
 //    if(ioctl(vm->fd_vm, KVM_CREATE_IRQCHIP, 0) < 0){ perror("KVM_CREATE_IRQCHIP"); exit(1);}
-//    printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
 
 
     /* VM code,data,stack */
@@ -291,6 +388,7 @@ void vm_init(vm* vm, const char * shared_pages)
 
     madvise(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE, MADV_MERGEABLE);  // advise merge
     if (init_memory_slot(vm, vm->mem_shared, MEM_SLOT_5, 0, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE) != 0){ perror("VM init memory region own pages KVM_SET_USER_MEMORY_REGION");}
+    printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* init vcpu */
     init_vcpu(vm);
@@ -306,6 +404,9 @@ void vm_init(vm* vm, const char * shared_pages)
     /* init segments */
     init_segments(&sregs);
     printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
+
+    /* init IDT GDT */
+    init_gdt_idt(vm, &sregs);
 
     /* set special registers */
     if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
