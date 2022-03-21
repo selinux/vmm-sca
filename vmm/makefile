@@ -5,7 +5,7 @@ DEBUG=-g
 ARCH=-m64
 OPTS=$(CFLAGS) $(WFLAGS) $(ARCH) $(DEBUG)
 
-OUTPUT=VMM
+OUTPUT=vmm-sca
 GUEST_DEPS=../common/common.h $(wildcard ../guests/*.c)
 
 SRC=$(wildcard *.c)
@@ -16,11 +16,11 @@ COMMON=../common/common.h
 run: $(OUTPUT) $(PAYLOAD)
 	@./$(OUTPUT)
 
-VMM: $(OBJ) $(PAYLOAD) $(COMMON)
+vmm-sca: $(OBJ) $(PAYLOAD) $(COMMON)
 	$(MAKE) -C ../guests payload.elf
 	$(CC) $^ $(OPTS) -o $@
 
-VM.o: VM.c VM.h $(PAYLOAD)
+vm.o: vm.c vm.h $(PAYLOAD)
 	$(CC) $(OPTS) $< -c
 
 %.o: %.c ../common/common.h

@@ -23,10 +23,10 @@
 #include <pthread.h>
 #include <sys/random.h>
 #include "../common/common.h"
-#include "VMM-thread.h"
+#include "vmm-thread.h"
 
 #include "ksm.h"
-#include "VM.h"
+#include "vm.h"
 
 
 extern pthread_barrier_t   barrier; // wait until all VMs are started
@@ -56,7 +56,10 @@ void *run_vm(void * ptr)
 
             case KVM_EXIT_MMIO:
                 if(vm->vcpu.kvm_run->mmio.is_write)
-                    printf("at least !!\n");
+                    printf("at least MMIO write !!\n");
+                else {
+                    printf("at least MMIO read exit!!\n");
+                }
                 continue;
             case KVM_EXIT_SHUTDOWN:
                 ret = 0;

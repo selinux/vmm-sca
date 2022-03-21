@@ -26,9 +26,9 @@
 #include <sys/random.h>
 #include "../common/common.h"
 
-#include "VMM.h"
-#include "VM.h"
-#include "VMM-thread.h"
+#include "vmm.h"
+#include "vm.h"
+#include "vmm-thread.h"
 #include "ksm.h"
 
 #include "../version.h"

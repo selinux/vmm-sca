@@ -26,7 +26,7 @@
 #include <assert.h>
 
 #include "../common/common.h"
-#include "VM.h"
+#include "vm.h"
 
 
 /** Initialize paging PML4 pages tables in VM memory
