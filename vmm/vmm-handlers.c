@@ -60,7 +60,7 @@ void handle_mmio(vm *vm) {
     }
 }
 
-void handle_pmio(vm *vm) {
+uint8_t handle_pmio(vm *vm, command_s* cmd) {
     struct kvm_run *run = vm->vcpu.kvm_run;
 
     /* VM write */
@@ -70,19 +70,9 @@ void handle_pmio(vm *vm) {
             fwrite(p + run->io.data_offset,
                    run->io.size, 1, stdout);
             fflush(stdout);
-            return;
+            return 0;
         }
-        if (vm->vcpu.kvm_run->io.port == PMIO_PRINT_MEASURES) {
 
-            printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
-            uint64_t *m = (uint64_t *) vm->mem_measures + 1;  // skip first measure
-            for (int i = 1; i < NB_SAMPLES; i++) {
-                uint64_t dm = *(uint64_t *) m - *(uint64_t *) (m - 1);
-                printf("%s (%04d) : %lu (Δ %lu)\n", vm->vm_name, i, *(uint64_t *) m, dm);
-                m++;
-            }
-            return;
-        }
         if (vm->vcpu.kvm_run->io.port == 0xffaa) {
             fprintf(stdout, "VMM : %s PMIO write on port 0x%x size %d\n", vm->vm_name, vm->vcpu.kvm_run->io.port, vm->vcpu.kvm_run->io.size);
         }
@@ -92,6 +82,7 @@ void handle_pmio(vm *vm) {
         if (vm->vcpu.kvm_run->io.port == 0xffac) {
             fprintf(stdout, "VMM : %s PMIO write on port 0x%x size %d\n", vm->vm_name, vm->vcpu.kvm_run->io.port, vm->vcpu.kvm_run->io.size);
         }
+        return 0;
     }
     /* VM read */
     if (run->io.direction == KVM_EXIT_IO_IN) {
@@ -99,7 +90,25 @@ void handle_pmio(vm *vm) {
             fprintf(stdout, "VMM : %s PMIO read on port 0x%x, size %d\n", vm->vm_name, vm->vcpu.kvm_run->io.port, vm->vcpu.kvm_run->io.size);
             uint8_t *addr = (uint8_t *)run + run->io.data_offset;
             *addr = 'g';
-            return;
+            return 0;
        }
+        if (run->io.port == PMIO_READ_CMD) {
+//            fprintf(stdout, "VMM : %s PMIO read on port 0x%x, size %d\n", vm->vm_name, vm->vcpu.kvm_run->io.port, vm->vcpu.kvm_run->io.size);
+            uint8_t *addr = (uint8_t *)run + run->io.data_offset;
+            *addr = cmd->cmd;
+            usleep(cmd->wait);
+            if (cmd->cmd == PRIMITIVE_PRINT_MEASURES) {
+
+                printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
+                uint64_t *m = (uint64_t *) vm->mem_measures + 1;  // skip first measure
+                for (int i = 1; i < NB_SAMPLES; i++) {
+                    uint64_t dm = *(uint64_t *) m - *(uint64_t *) (m - 1);
+                    printf("%s (%04d) : %lu (Δ %lu)\n", vm->vm_name, i, *(uint64_t *) m, dm);
+                    m++;
+                }
+            }
+            return 1;
+        }
     }
+    return 0;
 }

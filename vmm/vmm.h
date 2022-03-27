@@ -39,6 +39,8 @@ typedef struct my_vm {
     void *mem_measures;
     void *mem_own;
     void *mem_shared;
+    command_s *cmds;
+    uint64_t nb_cmd;
 } vm;
 
 

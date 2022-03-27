@@ -19,6 +19,7 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <linux/kvm.h>
 #include <pthread.h>
 #include <sys/random.h>
@@ -36,6 +37,8 @@ void *run_vm(void * ptr)
 {
     vm *vm = (void *)ptr;
     int ret = 1;
+    command_s *cmd = vm->cmds;
+    uint64_t nb_cmd = vm->nb_cmd;
 
     printf("%s : waiting...\n", vm->vm_name);
     pthread_barrier_wait (&barrier);
@@ -61,7 +64,8 @@ void *run_vm(void * ptr)
                 ret = 0;
                 goto check;
             case KVM_EXIT_IO:
-                handle_pmio(vm);
+                if(handle_pmio(vm, cmd) == 1){ cmd++; nb_cmd--;}
+                if(nb_cmd == 0) { usleep(500); goto check;}
                 continue;
             /* fall through */
             default:
@@ -104,7 +108,7 @@ void *time_master(void * ptr)
     pthread_barrier_wait (&barrier);
     printf("time master : running...\n");
 
-    translate_vm_addr(&vms[0], VM_MEM_PT_ADDR);
+//    translate_vm_addr(&vms[0], VM_MEM_PT_ADDR);
 //    usleep(100000);
 //    *(uint64_t *)(vms[ATTACKER].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_EXIT;   // test unlock VM victim
 

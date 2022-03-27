@@ -28,11 +28,7 @@ __attribute__((noreturn))
 __attribute__((section(".start")))
 _start(void) {
 
-//    static long long unsigned *measures = (void *)VM_MEM_MEASURES_ADDR;
-//    for(int i=0; i< NB_SAMPLES;i++){
-//        *(measures++) = __rdtsc();
-//    }
-//    print_measures();
+    wait_action();
 
     for(;;)
         exit_halt();

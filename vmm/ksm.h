@@ -1,4 +1,4 @@
-#ifndef __KSM
+#ifndef __KSM_H_
 #define __KSM_H_
 
 #include <stdlib.h>

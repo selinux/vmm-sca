@@ -31,77 +31,27 @@
 
 
 
-static gdt_entry_t build_entry(uint32_t base, uint32_t limit, uint8_t type, uint8_t s, uint8_t db, uint8_t granularity, uint8_t dpl) {
-    gdt_entry_t entry;
-    // For a TSS and LDT, base is the addresse of the TSS/LDT structure
-    // and limit is the size of the structure.
-    entry.lim15_0 = limit & 0xffff;
-    entry.base15_0 = base & 0xffff;
-    entry.base23_16 = (base >> 16) & 0xff;
-    entry.type = type;  // See TYPE_xxx flags
-    entry.s = s;        // 1 for segments; 0 for system (TSS, LDT, gates)
-    entry.dpl = dpl;    // privilege level
-    entry.present = 1;  // present in memory
-    entry.lim19_16 = (limit >> 16) & 0xf;
-    entry.avl = 0;      // available for use
-    entry.l = 0;        // should be 0 (64-bit code segment)
-    entry.db = db;      // 1 for 32-bit code and data segments; 0 for system (TSS, LDT, gate)
-    entry.granularity = granularity;  // granularity of the limit value: 0 = 1 byte; 1 = 4096 bytes
-    entry.base31_24 = (base >> 24) & 0xff;
-    return entry;
+
+
+uint64_t gdt_create_descriptor(uint32_t base, uint32_t limit, uint16_t flag)
+{
+    uint64_t descriptor;
+
+    // Create the high 32 bit segment
+    descriptor  =  limit       & 0x000F0000;         // set limit bits 19:16
+    descriptor |= (flag <<  8) & 0x00F0FF00;         // set type, p, dpl, s, g, d/b, l and avl fields
+    descriptor |= (base >> 16) & 0x000000FF;         // set base bits 23:16
+    descriptor |=  base        & 0xFF000000;         // set base bits 31:24
+
+    // Shift by 32 to allow for low part of segment
+    descriptor <<= 32;
+
+    // Create the low 32 bit segment
+    descriptor |= base  << 16;                       // set base bits 15:0
+    descriptor |= limit  & 0x0000FFFF;               // set limit bits 15:0
+
+    return descriptor;
 }
-
-static idt_entry_t idt_build_entry(uint16_t selector, uint32_t offset, uint8_t type, uint8_t dpl) {
-    idt_entry_t entry;
-    entry.offset15_0 = offset & 0xffff;
-    entry.selector = selector;
-    entry.reserved = 0;
-    entry.type = type;
-    entry.dpl = dpl;
-    entry.p = 1;
-    entry.offset31_16 = (offset >> 16) & 0xffff;
-    return entry;
-}
-
-
-#define S_CODE_OR_DATA   1
-// For TSS segment, LDT, call gate, interrupt gate, trap gate, task gate
-#define S_SYSTEM   0
-// D/B bit
-#define DB_SEG  1
-#define DB_SYS  0
-
-/** Return a NULL GDT entry.
- *
- * @return
- */
-gdt_entry_t gdt_make_null_segment() {
-	gdt_entry_t entry;
-	memset(&entry, 0, sizeof(gdt_entry_t));
-	return entry;
-}
-/** Return a code segment specified by the base, limit and privilege level passed in arguments.
- *
- * @param base
- * @param limit
- * @param dpl
- * @return
- */
-gdt_entry_t gdt_make_code_segment(uint32_t base, uint32_t limit, uint8_t dpl) {
-	return build_entry(base, limit, TYPE_CODE_EXECONLY, S_CODE_OR_DATA, DB_SEG, 1, dpl);
-}
-
-/** Return a read-write data segment specified by the base, limit and privilege level passed in arguments.
- *
- * @param base
- * @param limit
- * @param dpl
- * @return
- */
-gdt_entry_t gdt_make_data_segment(uint32_t base, uint32_t limit, uint8_t dpl) {
-	return build_entry(base, limit, TYPE_DATA_RW, S_CODE_OR_DATA, DB_SEG, 1, dpl);
-}
-
 
 /** Initialize paging PML4 pages tables in VM memory
  *
@@ -191,29 +141,33 @@ static void init_segments(struct kvm_sregs *sregs)
 }
 
 
-/** Initialize GDT and IDT without handler VM will attach them later
- *
- * @param vm
- * @param sregs
- */
-static void init_gdt_idt(vm * vm, struct kvm_sregs *sregs){
-    struct kvm_dtable _gdt = {.base=VM_GDT_ADDR, .limit= VM_GDT_SIZE-1};
-    struct kvm_dtable _idt = {.base = VM_IDT_ADDR, .limit = VM_IDT_SIZE-1};
-    sregs->gdt = _gdt;
-    sregs->idt = _idt;
-
-    /* populate GDT with two entries */
-    gdt_entry_t *gdt_table = vm->mem_run + VM_GDT_ADDR;
-    gdt_table[0] = gdt_make_null_segment();
-    gdt_table[1] = gdt_make_code_segment(0x0, 0xFFFFFF, DPL_KERNEL);
-    gdt_table[2] = gdt_make_data_segment(0x0, 0xFFFFFF, DPL_KERNEL);
-
-    /* populate IDT without functions handler (guest will do) */
-    idt_entry_t *idt_table =  vm->mem_run + VM_IDT_ADDR;
-    for (int i = 0; i < 256; i++) {
-		idt_table[i] = idt_build_entry(GDT_KERNEL_CODE_SELECTOR, 0, TYPE_INTERRUPT_GATE, DPL_KERNEL);
-	}
-}
+///** Initialize GDT and IDT without handler VM will attach them later
+// *
+// * @param vm
+// * @param sregs
+// */
+//static void init_gdt_idt(vm * vm, struct kvm_sregs *sregs){
+//    struct kvm_dtable _gdt = {.base=VM_GDT_ADDR, .limit= VM_GDT_SIZE-1};
+//    struct kvm_dtable _idt = {.base = VM_IDT_ADDR, .limit = VM_IDT_SIZE-1};
+//    sregs->gdt = _gdt;
+//    sregs->idt = _idt;
+//
+//    /* populate GDT with two entries */
+//    uint64_t *gdt_table = vm->mem_run + VM_GDT_ADDR;
+//    gdt_table[0] = gdt_create_descriptor(0, 0, 0);
+//    gdt_table[1] = gdt_create_descriptor(0, 0x000FFFFF, (GDT_CODE_PL0));
+//    gdt_table[2] = gdt_create_descriptor(0, 0x000FFFFF, (GDT_DATA_PL0));
+//
+//    /* populate IDT without functions handler (guest will do) */
+////    idt64_entry_t *idt_table = vm->mem_run + VM_IDT_ADDR;
+////    for (int i = 0; i < 20; i++) {
+////        idt_table[i] = idt_build_entry( 8, 0, TYPE_INTERRUPT_GATE, DPL_KERNEL);
+////    }
+////    for (int i = 0; i < 16; i++) {
+////		idt_table[32+i] = idt_build_entry( 8, 0, TYPE_INTERRUPT_GATE, DPL_KERNEL);
+////	}
+//
+//}
 
 
 /** Initialize vcpu registers
@@ -406,7 +360,7 @@ void vm_init(vm* vm, const char * shared_pages)
     printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* init IDT GDT */
-    init_gdt_idt(vm, &sregs);
+//    init_gdt_idt(vm, &sregs);
 
     /* set special registers */
     if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}

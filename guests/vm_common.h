@@ -14,7 +14,6 @@ uint32_t inl(uint16_t port);
 
 void exit_halt();
 void print_measures();
-int myloop();
 void slow_vmm_printf(char *str);
 int wait_action();
 

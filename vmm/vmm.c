@@ -21,6 +21,7 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <stdint.h>
+#include <sys/mman.h>
 #include <linux/kvm.h>
 #include <pthread.h>
 #include <sys/random.h>
@@ -30,6 +31,7 @@
 #include "vm.h"
 #include "vmm-thread.h"
 #include "ksm.h"
+#include "measures_io.h"
 
 #include "../version.h"
 
@@ -123,12 +125,13 @@ int main(int argc, char ** argv)
     printf("VMM : %d VMs initialized...launch VMs threads\n\n", NUMBEROFROLE);
 
     /* pretty name VMs */
-    strncpy(vm[0].vm_name, "VM alice",  256);
-    strncpy(vm[1].vm_name, "VM charlie",  256);
-    strncpy(vm[2].vm_name, "VM eve",  256);
-    vm[0].vm_role = VICTIM;
-    vm[1].vm_role = ATTACKER;
-    vm[2].vm_role = DEFENDER;
+    strncpy(vm[VICTIM].vm_name, "VM alice",  256);
+    strncpy(vm[ATTACKER].vm_name, "VM charlie",  256);
+    strncpy(vm[DEFENDER].vm_name, "VM eve",  256);
+    vm[VICTIM].vm_role = VICTIM;
+    vm[ATTACKER].vm_role = ATTACKER;
+    vm[DEFENDER].vm_role = DEFENDER;
+    load_commands("my_file.raw", vm);
 
     /* create a barrier */
     pthread_barrier_init (&barrier, NULL, NUMBEROFROLE+1);
@@ -160,6 +163,10 @@ int main(int argc, char ** argv)
 
     printf("VMM : free shared pages buffers\n");
     free(shared_page_1);
+    for( int i = 0; i < NUMBEROFROLE; i++) {
+        free(vm[i].cmds);
+    }
+
 
  end_ksm:
     ksm_close();
