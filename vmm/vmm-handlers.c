@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <string.h>
 #include <stdint.h>
 #include <linux/kvm.h>
@@ -93,18 +94,25 @@ uint8_t handle_pmio(vm *vm, command_s* cmd) {
             return 0;
        }
         if (run->io.port == PMIO_READ_CMD) {
+            struct timespec release_time;
+            struct timespec current_time;
 //            fprintf(stdout, "VMM : %s PMIO read on port 0x%x, size %d\n", vm->vm_name, vm->vcpu.kvm_run->io.port, vm->vcpu.kvm_run->io.size);
             uint8_t *addr = (uint8_t *)run + run->io.data_offset;
             *addr = cmd->cmd;
-            usleep(cmd->wait);
+            clock_gettime(CLOCK_MONOTONIC, &current_time);
+//            release_time.tv_sec = current_time.tv_sec+(cmd->wait/1000000);
+            release_time.tv_nsec = current_time.tv_nsec+(cmd->wait%1000000);
+            while(release_time.tv_nsec < current_time.tv_nsec){
+                clock_gettime(CLOCK_MONOTONIC, &current_time);
+            }
+//            usleep(cmd->wait);
             if (cmd->cmd == PRIMITIVE_PRINT_MEASURES) {
 
                 printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
-                uint64_t *m = (uint64_t *) vm->mem_measures + 1;  // skip first measure
-                for (int i = 1; i < NB_SAMPLES; i++) {
-                    uint64_t dm = *(uint64_t *) m - *(uint64_t *) (m - 1);
-                    printf("%s (%04d) : %lu (Δ %lu)\n", vm->vm_name, i, *(uint64_t *) m, dm);
-                    m++;
+                uint64_t *m = (uint64_t *) vm->mem_measures;  // skip first measure
+                for (uint64_t i = 0; i < vm->nb_cmd; i++) {
+//                    uint64_t dm = *(uint64_t *) m - *(uint64_t *) (m - 1);
+                    printf("%s (%04ld) : %lu\n", vm->vm_name, i, *(uint64_t *) (m+i));
                 }
             }
             return 1;

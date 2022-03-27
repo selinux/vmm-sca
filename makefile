@@ -10,21 +10,25 @@ help:
 	@echo -e "clean :\t\t\t\t\tclean up everything\n"
 
 .PHONY: all
-all:
+all: test_bench.dat
 	$(MAKE) -C guests all
 	$(MAKE) -C vmm run
+
+test_bench.dat: tools/gen_measures.py
+	@echo generate test_bench commands
+	@python tools/gen_measures.py
 
 update_version:
 	./gen_version.sh version.h
 
 .PHONY: clean
 clean:
+	@rm -f test_bench.dat
 	$(MAKE) -C guests clean
 	$(MAKE) -C vmm clean
 
 tags:
 	@ctags -R
-
 
 enable_ksm:
 	echo 1 | sudo tee /sys/kernel/mm/ksm/run

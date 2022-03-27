@@ -43,8 +43,6 @@ int load_commands(char * filename, vm *vm){
     }
     /* append commands to VMs */
     while (fread(&cmd, sizeof(command_s), 1, fp) == 1){
-        printf("read command cmd = %d, vm %s\n", cmd.cmd, vm_role(cmd.vm_role));
-        fflush(stdout);
         switch (cmd.vm_role) {
             case VICTIM:
                 *(pos[VICTIM]++) = (command_s)cmd;

@@ -108,7 +108,7 @@ void *time_master(void * ptr)
     pthread_barrier_wait (&barrier);
     printf("time master : running...\n");
 
-//    translate_vm_addr(&vms[0], VM_MEM_PT_ADDR);
+    translate_vm_addr(&vms[0], VM_MEM_PT_ADDR);
 //    usleep(100000);
 //    *(uint64_t *)(vms[ATTACKER].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_EXIT;   // test unlock VM victim
 

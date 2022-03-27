@@ -131,7 +131,7 @@ int main(int argc, char ** argv)
     vm[VICTIM].vm_role = VICTIM;
     vm[ATTACKER].vm_role = ATTACKER;
     vm[DEFENDER].vm_role = DEFENDER;
-    load_commands("my_file.raw", vm);
+    load_commands("../test_bench.dat", vm);
 
     /* create a barrier */
     pthread_barrier_init (&barrier, NULL, NUMBEROFROLE+1);

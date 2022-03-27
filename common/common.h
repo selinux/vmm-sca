@@ -49,7 +49,7 @@
 #define PMIO_PRINT_MEASURES         0xABBA
 #define PMIO_READ                   0xABBB
 #define PMIO_READ_CMD               0xABBC
-#define VM_EXIT_RETURN_CODE         42
+#define VM_EXIT_RETURN_CODE         (42)
 #define VM_EXIT_RETURN_CODE_ADDR    (0x400)
 
 #define PRIMITIVE_CMD_ADDR          (VM_MEM_MMIO_ADDR)
