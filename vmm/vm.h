@@ -143,6 +143,7 @@ typedef enum {
 
 void vm_init(vm* vm, const char * shared_pages);
 struct kvm_translation translate_vm_addr(vm* vm, long long unsigned int addr);
+void vm_destroy(vm* vm);
 char * vm_role(ROLE r);
 
 #endif

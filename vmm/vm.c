@@ -30,29 +30,6 @@
 
 
 
-
-
-
-uint64_t gdt_create_descriptor(uint32_t base, uint32_t limit, uint16_t flag)
-{
-    uint64_t descriptor;
-
-    // Create the high 32 bit segment
-    descriptor  =  limit       & 0x000F0000;         // set limit bits 19:16
-    descriptor |= (flag <<  8) & 0x00F0FF00;         // set type, p, dpl, s, g, d/b, l and avl fields
-    descriptor |= (base >> 16) & 0x000000FF;         // set base bits 23:16
-    descriptor |=  base        & 0xFF000000;         // set base bits 31:24
-
-    // Shift by 32 to allow for low part of segment
-    descriptor <<= 32;
-
-    // Create the low 32 bit segment
-    descriptor |= base  << 16;                       // set base bits 15:0
-    descriptor |= limit  & 0x0000FFFF;               // set limit bits 15:0
-
-    return descriptor;
-}
-
 /** Initialize paging PML4 pages tables in VM memory
  *
  * @param vm
@@ -105,6 +82,7 @@ static void init_long_mode(struct kvm_sregs *sregs)
     sregs->efer = EFER_LME | EFER_LMA;                                          // PCE : Performance-Monitoring Counter enable
 }
 
+
 /** Initialize segmentation
  *
  * @param sregs vcpu control registers
@@ -139,35 +117,6 @@ static void init_segments(struct kvm_sregs *sregs)
     seg.selector = 2 << 3;
     sregs->ds = sregs->es = sregs->fs = sregs->gs = sregs->ss = seg;
 }
-
-
-///** Initialize GDT and IDT without handler VM will attach them later
-// *
-// * @param vm
-// * @param sregs
-// */
-//static void init_gdt_idt(vm * vm, struct kvm_sregs *sregs){
-//    struct kvm_dtable _gdt = {.base=VM_GDT_ADDR, .limit= VM_GDT_SIZE-1};
-//    struct kvm_dtable _idt = {.base = VM_IDT_ADDR, .limit = VM_IDT_SIZE-1};
-//    sregs->gdt = _gdt;
-//    sregs->idt = _idt;
-//
-//    /* populate GDT with two entries */
-//    uint64_t *gdt_table = vm->mem_run + VM_GDT_ADDR;
-//    gdt_table[0] = gdt_create_descriptor(0, 0, 0);
-//    gdt_table[1] = gdt_create_descriptor(0, 0x000FFFFF, (GDT_CODE_PL0));
-//    gdt_table[2] = gdt_create_descriptor(0, 0x000FFFFF, (GDT_DATA_PL0));
-//
-//    /* populate IDT without functions handler (guest will do) */
-////    idt64_entry_t *idt_table = vm->mem_run + VM_IDT_ADDR;
-////    for (int i = 0; i < 20; i++) {
-////        idt_table[i] = idt_build_entry( 8, 0, TYPE_INTERRUPT_GATE, DPL_KERNEL);
-////    }
-////    for (int i = 0; i < 16; i++) {
-////		idt_table[32+i] = idt_build_entry( 8, 0, TYPE_INTERRUPT_GATE, DPL_KERNEL);
-////	}
-//
-//}
 
 
 /** Initialize vcpu registers
@@ -359,9 +308,6 @@ void vm_init(vm* vm, const char * shared_pages)
     init_segments(&sregs);
     printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
 
-    /* init IDT GDT */
-//    init_gdt_idt(vm, &sregs);
-
     /* set special registers */
     if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
 
@@ -374,12 +320,10 @@ void vm_init(vm* vm, const char * shared_pages)
     struct kvm_mp_state mp_state;
     if (ioctl(vm->fd_vcpu, KVM_GET_MP_STATE, &mp_state) < 0) { perror("KVM_GET_MP_STATE"); exit(1);}
 
-
     assert(VM_MEM_MEASURES_ADDR == translate_vm_addr(vm, (uint64_t) VM_MEM_MEASURES_ADDR).physical_address);
     assert(VM_MEM_OWNPAGES_ADDR == translate_vm_addr(vm, (uint64_t) VM_MEM_OWNPAGES_ADDR).physical_address);
     assert(VM_MEM_SHAREDPAGES_ADDR == translate_vm_addr(vm, (uint64_t) VM_MEM_SHAREDPAGES_ADDR).physical_address);
     assert(1 != translate_vm_addr(vm, 0x100000000LL).valid);   // memory over 4Gb is not valid
-
 
     /* print TSC frequency from guest pov */
     int tsc_freq = ioctl(vm->fd_vcpu, KVM_GET_TSC_KHZ, 0);
@@ -402,6 +346,25 @@ struct kvm_translation translate_vm_addr(vm* vm, const long long unsigned int ad
     printf("valid\t : %hhx\nwritable : %hhx\nusermode : %hhx\n", trans_addr.valid, trans_addr.writeable, trans_addr.usermode);
 #endif
     return trans_addr;
+}
+
+
+/** properly unmap and free VM memory
+ *
+ * @param vm
+ */
+void vm_destroy(vm* vm){
+
+    printf("VMM : unmap %s memory regions\n", vm->vm_name);
+    munmap(vm->mem_run, VM_MEM_RUN_SIZE);
+    munmap(vm->mem_pages_tables, VM_MEM_PT_SIZE);
+    munmap(vm->mem_mmio, VM_MEM_MMIO_SIZE);
+    munmap(vm->mem_measures, VM_MEM_MEASURES_SIZE);
+    munmap(vm->mem_own, VM_MEM_OWNPAGES_SIZE);
+    munmap(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE);
+
+    printf("VMM : free %s commands\n", vm->vm_name);
+    free(vm->cmds);
 }
 
 

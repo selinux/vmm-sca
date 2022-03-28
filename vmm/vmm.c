@@ -93,7 +93,7 @@ int main(int argc, char ** argv)
 	int vmm;                        // VMM fd
     vm vm[NUMBEROFROLE];            // VMs
     pthread_t tid[NUMBEROFROLE];    // VMs thread controller
-    pthread_t tm;                   // thread time master
+//    pthread_t tm;                   // thread time master
     void *iret[NUMBEROFROLE];      // threads return satus
     int vcpu_mmap_size;             // mmap size
     int err;
@@ -134,7 +134,7 @@ int main(int argc, char ** argv)
     load_commands("../test_bench.dat", vm);
 
     /* create a barrier */
-    pthread_barrier_init (&barrier, NULL, NUMBEROFROLE+1);
+    pthread_barrier_init (&barrier, NULL, NUMBEROFROLE);
 
     /* launch VMs threads */
     for( int i = 0; i < NUMBEROFROLE; i++) {
@@ -149,22 +149,22 @@ int main(int argc, char ** argv)
         if (err != 0 ) { perror("failed to launch VM thread"); exit(EXIT_FAILURE);}
 
     }
-    err = pthread_create( &tm, NULL, time_master, (void*) (vm));
-    if (err != 0 ) { perror("failed to launch time master thread"); exit(EXIT_FAILURE);}
+//    err = pthread_create( &tm, NULL, time_master, (void*) (vm));
+//    if (err != 0 ) { perror("failed to launch time master thread"); exit(EXIT_FAILURE);}
 
     /* join */
     for( int i = 0; i < NUMBEROFROLE; i++) {
         pthread_join(tid[i], &iret[i]);
         printf("%s : exit\n", vm[i].vm_name);
     }
-    void *ret_tm = NULL;
-    pthread_join(tm, ret_tm);
-    printf("time master : exit %ld\n", (int64_t)((void *)ret_tm));
+//    void *ret_tm = NULL;
+//    pthread_join(tm, ret_tm);
+//    printf("time master : exit %ld\n", (int64_t)((void *)ret_tm));
 
     printf("VMM : free shared pages buffers\n");
     free(shared_page_1);
     for( int i = 0; i < NUMBEROFROLE; i++) {
-        free(vm[i].cmds);
+        vm_destroy((vm+i));
     }
 
 
