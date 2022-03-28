@@ -94,7 +94,6 @@ int main(int argc, char ** argv)
     vm vm[NUMBEROFROLE];            // VMs
     pthread_t tid[NUMBEROFROLE];    // VMs thread controller
 //    pthread_t tm;                   // thread time master
-    void *iret[NUMBEROFROLE];      // threads return satus
     int vcpu_mmap_size;             // mmap size
     int err;
 
@@ -154,8 +153,9 @@ int main(int argc, char ** argv)
 
     /* join */
     for( int i = 0; i < NUMBEROFROLE; i++) {
-        pthread_join(tid[i], &iret[i]);
-        printf("%s : exit\n", vm[i].vm_name);
+        void *iret;
+        pthread_join(tid[i], &iret);
+        printf("%s : exit %d\n", vm[i].vm_name, *(int *)((void *)iret));
     }
 //    void *ret_tm = NULL;
 //    pthread_join(tm, ret_tm);
