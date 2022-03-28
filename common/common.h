@@ -52,12 +52,17 @@
 #define VM_EXIT_RETURN_CODE         (42)
 #define VM_EXIT_RETURN_CODE_ADDR    (0x400)
 
-#define PRIMITIVE_CMD_ADDR          (VM_MEM_MMIO_ADDR)
-#define PRIMITIVE_TARGET_ADDR       (VM_MEM_MMIO_ADDR+8)
-#define PRIMITIVE_WRITE_VALUE_ADDR  (VM_MEM_MMIO_ADDR+16)
+#define PRIMITIVE_TARGET_OFFSET     (0x0)
+#define PRIMITIVE_VALUE_OFFSET      (0x8)
+#define PRIMITIVE_WAIT_OFFSET       (0x10)
+#define PRIMITIVE_REAPETE_OFFSET    (0x18)
+#define PRIMITIVE_TARGET_ADDR       (VM_MEM_MMIO_ADDR+PRIMITIVE_TARGET_OFFSET)
+#define PRIMITIVE_VALUE_ADDR        (VM_MEM_MMIO_ADDR+PRIMITIVE_VALUE_OFFSET)
+#define PRIMITIVE_WAIT_ADDR         (VM_MEM_MMIO_ADDR+PRIMITIVE_WAIT_OFFSET)
+#define PRIMITIVE_REAPETE_ADDR      (VM_MEM_MMIO_ADDR+PRIMITIVE_REAPETE_OFFSET)
 
 typedef enum {
-    PRIMITIVE_WAIT,
+    PRIMITIVE_WAIT=1,
     PRIMITIVE_MEASURE,
     PRIMITIVE_READ,
     PRIMITIVE_WRITE,
@@ -85,6 +90,7 @@ typedef struct __attribute__((__packed__)) _command_s {
     useconds_t wait;
     uint64_t * addr;
     uint64_t value;
+    uint32_t repeat;
 } command_s;
 
 typedef struct __attribute__((__packed__)) _command_u {

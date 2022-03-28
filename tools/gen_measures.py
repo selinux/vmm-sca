@@ -30,12 +30,12 @@ class Role(Enum):
 
 
 class Prim_sca(Enum):
-    PRIMITIVE_WAIT = 0
-    PRIMITIVE_MEASURE = 1
-    PRIMITIVE_READ = 2
-    PRIMITIVE_WRITE = 3
-    PRIMITIVE_PRINT_MEASURES = 4
-    PRIMITIVE_EXIT = 5
+    PRIMITIVE_WAIT = 1
+    PRIMITIVE_MEASURE = 2
+    PRIMITIVE_READ = 3
+    PRIMITIVE_WRITE = 4
+    PRIMITIVE_PRINT_MEASURES = 5
+    PRIMITIVE_EXIT = 6
 
 
 OWN_PAGES_ADDR = 0xa09000
@@ -49,10 +49,10 @@ def set_header(role, nb):
     :param nb: number of commands
     :return: packed struct
     """
-    return struct.pack('<IQIQB', role, nb, 0, 0, 0)
+    return struct.pack('<IQIQBI', role, nb, 0, 0, 0, 0)
 
 
-def set_cmd(role, cmd, wait, addr=0, value=0):
+def set_cmd(role, cmd, wait, addr=0, value=0, repeat=0):
     """ return a packed command
 
     :param role: VM role
@@ -62,20 +62,20 @@ def set_cmd(role, cmd, wait, addr=0, value=0):
     :param value: value if meaningful (write)
     :return: packed struct
     """
-    return struct.pack('<IBIQQ', role, cmd, wait, addr, value)
+    return struct.pack('<IBIQQI', role, cmd, wait, addr, value, repeat)
 
 
-def cmd_measure(role, wait):
+def cmd_measure(role, wait, repeat=1):
     """ create a measure command
 
     :param role:
     :param wait:
     :return:
     """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_MEASURE.value, 'wait': wait, 'addr': 0, 'value': 0}
+    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_MEASURE.value, 'wait': wait, 'addr': 0, 'value': 0, 'repeat': repeat}
 
 
-def cmd_read(role, wait, addr):
+def cmd_read(role, wait, addr, repeat=1):
     """ create a read command (read at guest address)
 
     :param role:
@@ -83,10 +83,10 @@ def cmd_read(role, wait, addr):
     :param addr:
     :return:
     """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_READ.value, 'wait': wait, 'addr': addr, 'value': 0}
+    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_READ.value, 'wait': wait, 'addr': addr, 'value': 0, 'repeat': repeat}
 
 
-def cmd_write(role, wait, addr, value):
+def cmd_write(role, wait, addr, value, repeat=1):
     """ create a write command (write value at address)
 
     :param role:
@@ -95,7 +95,7 @@ def cmd_write(role, wait, addr, value):
     :param value:
     :return:
     """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_WRITE.value, 'wait': wait, 'addr': addr, 'value': value}
+    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_WRITE.value, 'wait': wait, 'addr': addr, 'value': value, 'repeat': repeat}
 
 
 def cmd_exit(role, wait):
@@ -105,7 +105,7 @@ def cmd_exit(role, wait):
     :param wait:
     :return:
     """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_EXIT.value, 'wait': wait, 'addr': 0, 'value': 0}
+    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_EXIT.value, 'wait': wait, 'addr': 0, 'value': 0, 'repeat': 1}
 
 
 def cmd_print_mes(role, wait):
@@ -115,7 +115,7 @@ def cmd_print_mes(role, wait):
     :param wait:
     :return:
     """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_PRINT_MEASURES.value, 'wait': wait, 'addr': 0, 'value': 0}
+    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_PRINT_MEASURES.value, 'wait': wait, 'addr': 0, 'value': 0, 'repeat': 1}
 
 
 def write_cmd(filename: str, data: {}):
@@ -132,9 +132,9 @@ def write_cmd(filename: str, data: {}):
         writer.write(set_header(Role.DEFENDER.value, len(data['cmd2'])))
         for r in ['cmd0', 'cmd1', 'cmd2']:
             for c in data[r]:
-                role, cmd, wait, addr, value = c.keys()
-                log.debug("{} {} {} 0x{:02x} {} ".format(c[role], c[cmd], c[wait], c[addr], c[value]))
-                writer.write(set_cmd(c[role], c[cmd], c[wait], c[addr], c[value]))
+                role, cmd, wait, addr, value, repeat = c.keys()
+                log.debug("{} {} {} 0x{:02x} {} ".format(c[role], c[cmd], c[wait], c[addr], c[value], c[repeat]))
+                writer.write(set_cmd(c[role], c[cmd], c[wait], c[addr], c[value], c[repeat]))
 
 
 def main():
@@ -144,23 +144,36 @@ def main():
     """
     data = {
         'cmd0': [
-            # cmd_measure(Role.VICTIM, 1000),
-            # cmd_measure(Role.VICTIM, 500000),
-            # cmd_measure(Role.VICTIM, 1000),
-            # cmd_measure(Role.VICTIM, 1000),
-            cmd_measure(Role.VICTIM, 150000),
-            # cmd_print_mes(Role.VICTIM, 100000),
-            cmd_exit(Role.VICTIM, 1000000)],
+            cmd_measure(Role.VICTIM, 0),
+            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*0)),
+            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*1)),
+            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*2)),
+            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*3)),
+            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*4)),
+            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*5)),
+            # cmd_measure(Role.VICTIM, 150000),
+            # cmd_print_mes(Role.VICTIM, 1000),
+            cmd_exit(Role.VICTIM, 0)],
         'cmd1': [
-            cmd_read(Role.ATTACKER, 1000, 0x203000),
-            cmd_read(Role.ATTACKER, 0, 0x203000),
-            cmd_read(Role.ATTACKER, 0, 0x203000),
-            cmd_read(Role.ATTACKER, 0, 0x203000),
-            cmd_read(Role.ATTACKER, 0, 0x203000),
-            cmd_read(Role.ATTACKER, 0, 0x204000),
-            cmd_read(Role.ATTACKER, 0, 0x204000),
-            cmd_write(Role.ATTACKER, 0, 0x204000, 0x20),
-            cmd_measure(Role.ATTACKER, 1000),
+            cmd_measure(Role.ATTACKER, 0),
+            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*0), 2),
+            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*1)),
+            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*2), 2),
+            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*3)),
+            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*4)),
+            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*5)),
+            cmd_write(Role.ATTACKER, 0, SHARED_PAGES_ADDR+(0x1000*0), 0xa5, 3),
+            # cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*7), 10),
+            # cmd_read(Role.ATTACKER, 0, 0x203000),
+            # cmd_read(Role.ATTACKER, 0, 0x203000),
+            # cmd_read(Role.ATTACKER, 0, 0xbeafb00b),
+            # cmd_read(Role.ATTACKER, 0, 0x203000),
+            # cmd_read(Role.ATTACKER, 0, 0x200100),
+            # cmd_read(Role.ATTACKER, 0, 0x20000c),
+            # cmd_read(Role.ATTACKER, 0, 0x204000),
+            # cmd_read(Role.ATTACKER, 0, 0x204000),
+            # cmd_write(Role.ATTACKER, 0, 0x200c00, 0x21),
+            # cmd_measure(Role.ATTACKER, 100000),
             # cmd_measure(Role.ATTACKER, 1000),
             # cmd_measure(Role.ATTACKER, 1000),
             # cmd_measure(Role.ATTACKER, 1000),
@@ -173,21 +186,21 @@ def main():
             # cmd_measure(Role.ATTACKER, 500000),
             # cmd_measure(Role.ATTACKER, 500000),
             # cmd_measure(Role.ATTACKER, 500000),
-            cmd_print_mes(Role.ATTACKER, 500000),
-            cmd_exit(Role.ATTACKER, 500000)],
+            # cmd_print_mes(Role.ATTACKER, 1000),
+            cmd_exit(Role.ATTACKER, 0)],
         'cmd2': [
-            cmd_measure(Role.DEFENDER, 500000),
-            cmd_measure(Role.DEFENDER, 500000),
-            cmd_measure(Role.DEFENDER, 500000),
-            cmd_measure(Role.DEFENDER, 500000),
-            cmd_measure(Role.DEFENDER, 500000),
-            cmd_measure(Role.DEFENDER, 500000),
-            cmd_measure(Role.DEFENDER, 500000),
-            cmd_measure(Role.DEFENDER, 500000),
-            cmd_measure(Role.DEFENDER, 500000),
-            cmd_measure(Role.DEFENDER, 500000),
-            # cmd_print_mes(Role.DEFENDER, 100000),
-            cmd_exit(Role.DEFENDER, 1000000)],
+            cmd_measure(Role.DEFENDER, 0),
+            # cmd_measure(Role.DEFENDER, 500000),
+            # cmd_measure(Role.DEFENDER, 500000),
+            # cmd_measure(Role.DEFENDER, 500000),
+            # cmd_measure(Role.DEFENDER, 500000),
+            # cmd_measure(Role.DEFENDER, 500000),
+            # cmd_measure(Role.DEFENDER, 500000),
+            # cmd_measure(Role.DEFENDER, 500000),
+            # cmd_measure(Role.DEFENDER, 500000),
+            # cmd_measure(Role.DEFENDER, 500000),
+            # cmd_print_mes(Role.DEFENDER, 1000),
+            cmd_exit(Role.DEFENDER, 0)],
     }
 
     write_cmd("test_bench.dat", data)

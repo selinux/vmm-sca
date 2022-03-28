@@ -57,14 +57,14 @@ void handle_mmio(vm *vm) {
                 fprintf(stderr, "VMM: Unsupported size in KVM_EXIT_MMIO\n");
                 value = 0;
         }
-        printf("VMM: MMIO %s write: len=%d addr=%ld value=0x%lx\n", vm->vm_name, run->mmio.len, (long int)run->mmio.phys_addr, value);
+        printf("VMM: MMIO %s write: len=%d addr=0x%lx value=0x%lx\n", vm->vm_name, run->mmio.len, (long int)run->mmio.phys_addr, value);
     }
 }
 
-uint8_t handle_pmio(vm *vm, command_s* cmd) {
+uint8_t handle_pmio(vm *vm, command_s* cmd, uint64_t * nb_timestamp) {
     struct kvm_run *run = vm->vcpu.kvm_run;
 
-    /* VM write */
+    /* VM write (OUTB) */
     if (vm->vcpu.kvm_run->io.direction == KVM_EXIT_IO_OUT) {
         if (vm->vcpu.kvm_run->io.port == 0xE9) {
             char *p = (char *) run;
@@ -73,7 +73,6 @@ uint8_t handle_pmio(vm *vm, command_s* cmd) {
             fflush(stdout);
             return 0;
         }
-
         if (vm->vcpu.kvm_run->io.port == 0xffaa) {
             fprintf(stdout, "VMM : %s PMIO write on port 0x%x size %d\n", vm->vm_name, vm->vcpu.kvm_run->io.port, vm->vcpu.kvm_run->io.size);
         }
@@ -85,35 +84,51 @@ uint8_t handle_pmio(vm *vm, command_s* cmd) {
         }
         return 0;
     }
-    /* VM read */
+    /* VM read (INB) */
     if (run->io.direction == KVM_EXIT_IO_IN) {
         if (run->io.port == PMIO_READ) {
             fprintf(stdout, "VMM : %s PMIO read on port 0x%x, size %d\n", vm->vm_name, vm->vcpu.kvm_run->io.port, vm->vcpu.kvm_run->io.size);
             uint8_t *addr = (uint8_t *)run + run->io.data_offset;
             *addr = 'g';
             return 0;
-       }
+        }
+        /* execute sca command */
         if (run->io.port == PMIO_READ_CMD) {
-            struct timespec release_time;
-            struct timespec current_time;
-//            fprintf(stdout, "VMM : %s PMIO read on port 0x%x, size %d\n", vm->vm_name, vm->vcpu.kvm_run->io.port, vm->vcpu.kvm_run->io.size);
-            uint8_t *addr = (uint8_t *)run + run->io.data_offset;
-            *addr = cmd->cmd;
-            clock_gettime(CLOCK_MONOTONIC, &current_time);
-//            release_time.tv_sec = current_time.tv_sec+(cmd->wait/1000000);
-            release_time.tv_nsec = current_time.tv_nsec+(cmd->wait%1000000);
-            while(release_time.tv_nsec < current_time.tv_nsec){
-                clock_gettime(CLOCK_MONOTONIC, &current_time);
-            }
-//            usleep(cmd->wait);
             if (cmd->cmd == PRIMITIVE_PRINT_MEASURES) {
 
                 printf("%s - dump measurement from VMM (direct VM memory access)\n", vm->vm_name);
                 uint64_t *m = (uint64_t *) vm->mem_measures;  // skip first measure
-                for (uint64_t i = 0; i < vm->nb_cmd; i++) {
-//                    uint64_t dm = *(uint64_t *) m - *(uint64_t *) (m - 1);
-                    printf("%s (%04ld) : %lu\n", vm->vm_name, i, *(uint64_t *) (m+i));
+                for (uint64_t i = 0; i < *nb_timestamp; i++) {
+                    uint64_t dm = *(uint64_t *) (m) - *(uint64_t *) (m - 1);
+                    if(*(uint64_t *) (m - 1)==0){dm=0;}
+                    printf("%s (%04ld) : %lu (%lu)\n", vm->vm_name, i, *(uint64_t *) (m++), dm);
                 }
+                uint8_t *write_back = (uint8_t *)run + run->io.data_offset;
+                *write_back = cmd->cmd;
+            } else {
+                /* pass additional values */
+                *(uint64_t *)(vm->mem_mmio+PRIMITIVE_TARGET_OFFSET) = (uint64_t )cmd->addr;
+                *(uint64_t *)(vm->mem_mmio+PRIMITIVE_VALUE_OFFSET) = (uint64_t)cmd->value;
+                *(uint64_t *)(vm->mem_mmio+PRIMITIVE_WAIT_OFFSET) = (uint64_t)cmd->wait;
+                *(uint64_t *)(vm->mem_mmio+PRIMITIVE_REAPETE_OFFSET) = (uint64_t)cmd->repeat;
+                /* write response back */
+                uint8_t *write_back = (uint8_t *)run + run->io.data_offset;
+                *write_back = cmd->cmd;
+                switch (cmd->cmd) {
+                    case PRIMITIVE_MEASURE:
+                        *nb_timestamp += cmd->repeat;
+                        break;
+                    case PRIMITIVE_READ:
+                        *nb_timestamp += 2*cmd->repeat;
+                        break;
+                    case PRIMITIVE_WRITE:
+                        *nb_timestamp += 2*cmd->repeat;
+                        break;
+                    default:
+                        break;
+                }
+                /* wait till release VM */
+                usleep(cmd->wait);
             }
             return 1;
         }

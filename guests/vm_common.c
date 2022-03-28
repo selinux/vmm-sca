@@ -47,7 +47,7 @@ uint32_t inl(uint16_t port)
 
 
 void exit_halt(){
-    *(long *) VM_EXIT_RETURN_CODE_ADDR = VM_EXIT_RETURN_CODE;
+    *(uint64_t *) VM_EXIT_RETURN_CODE_ADDR = VM_EXIT_RETURN_CODE;
     __asm__ ("hlt" : /* empty */ : "a" (VM_EXIT_RETURN_CODE) : "memory");
 }
 
@@ -66,59 +66,48 @@ void print_measures(){
 int wait_action(){
     uint64_t *measures = (uint64_t *)VM_MEM_MEASURES_ADDR;
     uint64_t * addr = NULL;
-    uint64_t tmp_value;
-    uint64_t tmp_addr;
+    uint64_t value;
     while (1){
         switch(inb(PMIO_READ_CMD)){
             case PRIMITIVE_READ:
-//                slow_vmm_printf("read\n");
-                *(measures++) = __builtin_ia32_rdtsc();
-                tmp_value = *addr;                          // read at
-                *(measures++) = __builtin_ia32_rdtsc();
-
-                tmp_addr = 0;       // reset address
-                tmp_value = 0;      // reset read value
+                for(uint64_t i = 0; i < *(uint64_t *)(PRIMITIVE_REAPETE_ADDR);i++ ) {
+                    addr = *(uint64_t **) PRIMITIVE_TARGET_ADDR;
+                    *(measures++) = __builtin_ia32_rdtsc();
+                    value = *addr;                          // read at
+                    *(measures++) = __builtin_ia32_rdtsc();
+                }
                 continue;
             case PRIMITIVE_WRITE:
-//                slow_vmm_printf("write\n");
-                tmp_value = *(uint64_t *)(PRIMITIVE_WRITE_VALUE_ADDR);
-                *(measures++) = __builtin_ia32_rdtsc();
-                *(uint64_t *)(PRIMITIVE_TARGET_ADDR) = (uint64_t )tmp_value;   // write to
-                *(measures++) = __builtin_ia32_rdtsc();
-
-                *(uint64_t *)(PRIMITIVE_TARGET_ADDR) = 0;    // reset address
+                for(uint64_t i = 0; i < *(uint64_t *)(PRIMITIVE_REAPETE_ADDR);i++ ) {
+                    addr = *(uint64_t **) PRIMITIVE_TARGET_ADDR;
+                    value = *(uint64_t *) (PRIMITIVE_VALUE_ADDR);
+                    *(measures++) = __builtin_ia32_rdtsc();
+                    *addr = (uint64_t) value;   // write to
+                    *(measures++) = __builtin_ia32_rdtsc();
+                }
                 continue;
             case PRIMITIVE_MEASURE:
 //                slow_vmm_printf("measure\n");
-                *(measures++) = __builtin_ia32_rdtsc();
+                for(uint64_t i = 0; i < *(uint64_t *)(PRIMITIVE_REAPETE_ADDR);i++ ) {
+                    *(measures++) = __builtin_ia32_rdtsc();
+                }
                 continue;
             case PRIMITIVE_PRINT_MEASURES:
-//                slow_vmm_printf("print\n");
-                print_measures();
+                /* handled vmm side only */
                 continue;
             case PRIMITIVE_WAIT:
-                slow_vmm_printf("wait\n");
+//                slow_vmm_printf("wait\n");
                 continue;
             case PRIMITIVE_EXIT:
-                slow_vmm_printf("exit\n");
-                exit_halt();
-                break;
+//                slow_vmm_printf("exit\n");
+                return 0;
             default:
                 slow_vmm_printf("error unknown command\n");
-//                outb(0xE9, *cmd);
                 continue;
         }
     }
-//    end_loop:
-
-//    return 0xa5;
 }
 
-/* rdtsc */
-//extern __inline long long unsigned
-//__attribute__((__gnu_inline__, __always_inline__, __artificial__)) __rdtsc () {
-//    return __builtin_ia32_rdtsc ();
-//}
 
 static idt64_entry_t idt_build_entry(uint16_t selector, uint64_t offset, uint8_t type, uint8_t dpl) {
     idt64_entry_t entry;

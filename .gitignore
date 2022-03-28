@@ -1,6 +1,7 @@
 .idea/**
 vmm/vmm-sca
 test_bench.dat
+results/**
 
 *.o
 *.bin

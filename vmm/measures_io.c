@@ -66,12 +66,19 @@ int load_commands(char * filename, vm *vm){
     return 0;
 }
 
-//int save_measures(char* filename, uint64_t* measures, uint64_t nb_measures){
-//    FILE *fp = fopen(filename, "rb");
-//    if (!fp) { perror("fopen commands file"); return EXIT_FAILURE;}
-//
-//    return 0;
-//}
+
+int save_measures(char* filename, uint64_t* measures, uint64_t nb_measures){
+    uint64_t * _m = measures;
+    FILE *fp = fopen(filename, "w");
+    if (!fp) { perror("fopen commands file"); return EXIT_FAILURE;}
+
+    for(uint64_t i = 0; i < nb_measures; i++){
+        size_t ret = fwrite(_m++, sizeof(uint64_t), 1, fp);
+        if (ret != 1) { perror("fwrite failed to write timestamps file"); return -1;}
+    }
+    return 0;
+}
+
 
 int save_commands(char* filename, command_u *cmd, const uint64_t s){
     FILE *fp = fopen(filename, "w");

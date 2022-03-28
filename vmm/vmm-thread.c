@@ -29,6 +29,7 @@
 #include "ksm.h"
 #include "vm.h"
 #include "vmm-handlers.h"
+#include "measures_io.h"
 
 
 extern pthread_barrier_t   barrier; // wait until all VMs are started
@@ -39,6 +40,7 @@ void *run_vm(void * ptr)
     int ret = 1;
     command_s *cmd = vm->cmds;
     uint64_t nb_cmd = vm->nb_cmd;
+    uint64_t nb_timestamp = 0;
 
     printf("%s : waiting...\n", vm->vm_name);
     pthread_barrier_wait (&barrier);
@@ -52,7 +54,6 @@ void *run_vm(void * ptr)
 
 	for (;;) {
 		if (ioctl(vm->fd_vcpu, KVM_RUN, 0) < 0) { perror("KVM_RUN"); ret = -1; }
-//        printf("%s : exit reason %d\n", vm->vm_name, vm->vcpu.kvm_run->exit_reason);
         switch (vm->vcpu.kvm_run->exit_reason) {
             case KVM_EXIT_HLT:
                 ret = 0;
@@ -64,8 +65,7 @@ void *run_vm(void * ptr)
                 ret = 0;
                 goto check;
             case KVM_EXIT_IO:
-                if(handle_pmio(vm, cmd) == 1){ cmd++; nb_cmd--;}
-                if(nb_cmd == 0) { usleep(500); goto check;}
+                if(handle_pmio(vm, cmd, &nb_timestamp) == 1){ cmd++; nb_cmd--;}
                 continue;
             /* fall through */
             default:
@@ -91,6 +91,12 @@ void *run_vm(void * ptr)
                (unsigned long long)memval);
         ret = -1;
     }
+    char filename[512];
+    char time_buff[32];
+    time_t timer = time(NULL);
+    strftime (time_buff, 32, "%Y.%m.%d-%H:%M:%S", localtime (&timer));
+    snprintf(filename, 512, "../results/%s-%s.dat", vm->vm_name, time_buff);
+    save_measures(filename, vm->mem_measures, nb_timestamp);
 
     pthread_exit((void*)&ret);
 }
