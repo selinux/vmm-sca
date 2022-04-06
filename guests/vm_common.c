@@ -65,8 +65,8 @@ void print_measures(){
 
 int wait_action(){
     uint64_t *measures = (uint64_t *)VM_MEM_MEASURES_ADDR;
-    uint64_t * addr = NULL;
-    uint64_t value;
+    volatile uint64_t * addr = NULL;
+    volatile uint64_t value;
     while (1){
         switch(inb(PMIO_READ_CMD)){
             case PRIMITIVE_READ:
