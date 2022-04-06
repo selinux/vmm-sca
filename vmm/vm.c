@@ -271,7 +271,6 @@ void vm_init(vm* vm, const char * shared_pages)
     if (vm->mem_shared == MAP_FAILED) { perror("mmap shared pages region"); exit(1);}
     /* transfer shared pages data */
     memcpy(vm->mem_shared, shared_pages, NB_SHARED_PAGES*PAGESIZE);
-    printf("%s (%s) : transferred %lld shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
 
     /* initialize and attach memory region to VM */
     madvise(vm->mem_run, VM_MEM_RUN_SIZE, MADV_UNMERGEABLE);

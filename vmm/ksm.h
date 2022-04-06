@@ -25,6 +25,8 @@ int ksm_init();
 void ksm_close();
 uint ksm_enabled();
 uint ksm_shared_pages();
+uint ksm_sharing_pages();
+uint ksm_ushared_pages();
 uint ksm_max_shared_pages();
 int ksm_wait(const uint shared_pages);
 
