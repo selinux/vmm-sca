@@ -17,9 +17,24 @@ from sys import exit
 import struct
 import logging
 from enum import Enum
+import re
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
+
+VM_MEM_MMIO_ADDR = 0
+VM_MEM_MMIO_SIZE = 0
+VM_MEM_PT_ADDR = 0
+VM_MEM_PT_SIZE = 0
+VM_MEM_RUN_ADDR = 0
+VM_MEM_RUN_SIZE = 0
+NB_SAMPLES = 0
+VM_MEM_MEASURES_ADDR = 0
+VM_MEM_MEASURES_SIZE = 0
+VM_MEM_OWNPAGES_ADDR = 0
+VM_MEM_OWNPAGES_SIZE = 0
+VM_MEM_SHAREDPAGES_ADDR = 0
+VM_MEM_SHAREDPAGES_SIZE = 0
 
 
 class Role(Enum):
@@ -38,8 +53,24 @@ class Prim_sca(Enum):
     PRIMITIVE_EXIT = 6
 
 
-OWN_PAGES_ADDR = 0xa09000
-SHARED_PAGES_ADDR = 0xa29000
+
+def read_c_header(filename: str) -> dict:
+    """ import constants from C header file
+
+    :param filename: header_file.h
+    :return: dict const : value
+    """
+    defines = {}
+    with open(filename) as header_file:
+        for line in header_file.readlines():
+            if line.startswith("#define"):
+                line.rstrip()
+                line = line.split('//')[0]
+                m = re.search('#define\s+([A-Za-z]\w+)\s+(.*)', line)
+                if m:
+                    defines[m.group(1)] = m.group(2).replace(' ', '').replace('LL', '').replace('/', '//')
+
+    return defines
 
 
 def set_header(role, nb):
@@ -145,64 +176,68 @@ def main():
     data = {
         'cmd0': [
             cmd_measure(Role.VICTIM, 0),
-            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*0)),
-            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*1)),
-            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*2)),
-            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*3)),
-            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*4)),
-            # cmd_read(Role.VICTIM, 0, SHARED_PAGES_ADDR+(0x1000*5)),
-            # cmd_measure(Role.VICTIM, 150000),
+             cmd_measure(Role.VICTIM, 150000),
+             # cmd_read(Role.VICTIM, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*0)),
+             # cmd_read(Role.VICTIM, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*1)),
+             # cmd_read(Role.VICTIM, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*3)),
             # cmd_print_mes(Role.VICTIM, 1000),
             cmd_exit(Role.VICTIM, 0)],
         'cmd1': [
             cmd_measure(Role.ATTACKER, 0),
-            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*0), 2),
-            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*1)),
-            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*2), 2),
-            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*3)),
-            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*4)),
-            cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*5)),
-            cmd_write(Role.ATTACKER, 0, SHARED_PAGES_ADDR+(0x1000*0), 0xa5, 3),
-            # cmd_read(Role.ATTACKER, 0, OWN_PAGES_ADDR+(0x1000*7), 10),
-            # cmd_read(Role.ATTACKER, 0, 0x203000),
-            # cmd_read(Role.ATTACKER, 0, 0x203000),
-            # cmd_read(Role.ATTACKER, 0, 0xbeafb00b),
-            # cmd_read(Role.ATTACKER, 0, 0x203000),
-            # cmd_read(Role.ATTACKER, 0, 0x200100),
-            # cmd_read(Role.ATTACKER, 0, 0x20000c),
-            # cmd_read(Role.ATTACKER, 0, 0x204000),
-            # cmd_read(Role.ATTACKER, 0, 0x204000),
-            # cmd_write(Role.ATTACKER, 0, 0x200c00, 0x21),
-            # cmd_measure(Role.ATTACKER, 100000),
-            # cmd_measure(Role.ATTACKER, 1000),
-            # cmd_measure(Role.ATTACKER, 1000),
-            # cmd_measure(Role.ATTACKER, 1000),
-            # cmd_measure(Role.ATTACKER, 200000),
-            # cmd_measure(Role.ATTACKER, 1000),
-            # cmd_measure(Role.ATTACKER, 300000),
-            # cmd_measure(Role.ATTACKER, 1000),
-            # cmd_measure(Role.ATTACKER, 400000),
-            # cmd_measure(Role.ATTACKER, 1000),
-            # cmd_measure(Role.ATTACKER, 500000),
-            # cmd_measure(Role.ATTACKER, 500000),
-            # cmd_measure(Role.ATTACKER, 500000),
+            cmd_read(Role.ATTACKER, 0, VM_MEM_MEASURES_ADDR),                       # load measures page in cache
+            # cmd_read(Role.ATTACKER, 0, VM_MEM_SHAREDPAGES_ADDR+(0x1000*0), 4),
             # cmd_print_mes(Role.ATTACKER, 1000),
-            cmd_exit(Role.ATTACKER, 0)],
+            # cmd_exit(Role.ATTACKER, 0)
+            ],
         'cmd2': [
             cmd_measure(Role.DEFENDER, 0),
-            # cmd_measure(Role.DEFENDER, 500000),
-            # cmd_measure(Role.DEFENDER, 500000),
-            # cmd_measure(Role.DEFENDER, 500000),
-            # cmd_measure(Role.DEFENDER, 500000),
-            # cmd_measure(Role.DEFENDER, 500000),
-            # cmd_measure(Role.DEFENDER, 500000),
-            # cmd_measure(Role.DEFENDER, 500000),
-            # cmd_measure(Role.DEFENDER, 500000),
-            # cmd_measure(Role.DEFENDER, 500000),
-            # cmd_print_mes(Role.DEFENDER, 1000),
+
             cmd_exit(Role.DEFENDER, 0)],
     }
 
+    for i in range(0x100):
+        data['cmd1'].append(cmd_read(Role.ATTACKER, 0, VM_MEM_SHAREDPAGES_ADDR+(0x1000*i)))
+        # data['cmd1'].append(cmd_read(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i)))
+        data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_SHAREDPAGES_ADDR+(0x1000*i), 0xa5a5a5))
+        data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i), 0xa5a5a5))
+        # data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i), 0x5a5a5a))
+        # data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i), 0x5a5a5a))
+        # data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i), 0x5a5a5a))
+    # data['cmd1'].append(cmd_read(Role.ATTACKER, 0, VM_MEM_SHAREDPAGES_ADDR+(0x1000*i), 2))
+    data['cmd1'].append(cmd_exit(Role.ATTACKER, 0))
+
+
+    res = read_c_header("common/common.h")
+    for k,v in res.items():
+        # print("input : "+k+" = "+v)
+        try:
+            exec("global {}; {} = {}".format(k, k, v))
+            # exec(k+' = '+eval(v))
+            # print("yep : global "+k+" = "+v)
+            # print(hex(VM_MEM_SHAREDPAGES_ADDR), flush=True)
+
+        except :
+            # print("fail : global "+k+" = "+v)
+            pass
+
+    # print(hex(VM_MEM_RUN_ADDR), flush=True)
+    # print(hex(VM_MEM_RUN_SIZE), flush=True)
+    # print(hex(VM_MEM_MMIO_ADDR), flush=True)
+    # print(hex(VM_MEM_MMIO_SIZE), flush=True)
+    # print(hex(VM_MEM_PT_ADDR), flush=True)
+    # print(hex(VM_MEM_PT_SIZE), flush=True)
+    # print("samples : "+str(NB_SAMPLES), flush=True)
+    # print(hex(VM_MEM_MEASURES_ADDR), flush=True)
+    # print(hex(VM_MEM_MEASURES_SIZE), flush=True)
+    # print(hex(VM_MEM_OWNPAGES_ADDR), flush=True)
+    # print(hex(VM_MEM_OWNPAGES_SIZE), flush=True)
+    # print(hex(VM_MEM_SHAREDPAGES_ADDR), flush=True)
+    # print(hex(VM_MEM_SHAREDPAGES_SIZE), flush=True)
+
+    # if VM_MEM_MEASURES_SIZE//8 < NB_SAMPLES:
+    #     log.error("Measure memory too small")
+
+    log.debug("save file : test_bench.dat")
     write_cmd("test_bench.dat", data)
 
     exit(EX_OK)
