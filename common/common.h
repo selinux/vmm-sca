@@ -6,8 +6,6 @@
 
 
 #define PAGESIZE                (0x1000LL)
-#define SAMPLES2PAGES(A)        (((A+511)/512)*PAGESIZE)
-#define PAGES2SIZE(A)           (A*PAGESIZE)
 
 #define VM_MEM_RUN_ADDR         (0x0LL)
 #define VM_MEM_RUN_SIZE         (0x200000LL)
@@ -24,7 +22,7 @@
 
 #define NB_MMIO_PAGES           (0x1LL)
 #define VM_MEM_MMIO_ADDR        (VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE)
-#define VM_MEM_MMIO_SIZE        (PAGES2SIZE(NB_MMIO_PAGES))
+#define VM_MEM_MMIO_SIZE        (NB_MMIO_PAGES*PAGESIZE)
 
 #define NB_PT_PML4_PAGES        (0x1LL)                               // CR3 entry
 #define NB_PT_PDPT_PAGES        (0x1LL)                               // first Gb is enough
@@ -33,17 +31,18 @@
 #define VM_MEM_PT_ADDR          (VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE)
 #define VM_MEM_PT_SIZE          ((NB_PT_PML4_PAGES+NB_PT_PDPT_PAGES+NB_PT_PD_PAGES+NB_PTE_PAGES+1)*PAGESIZE)
 
-#define NB_SAMPLES              (0x10LL)
+#define NB_SAMPLES              (0xf000LL)
 #define VM_MEM_MEASURES_ADDR    (VM_MEM_PT_ADDR+VM_MEM_PT_SIZE)
-#define VM_MEM_MEASURES_SIZE    (SAMPLES2PAGES(NB_SAMPLES))
+#define VM_MEM_MEASURES_SIZE    (((NB_SAMPLES+511LL)/512LL)*PAGESIZE)
+//#define VM_MEM_MEASURES_SIZE    (((NB_SAMPLES+511LL)/512LL)*PAGESIZE)
 
-#define NB_OWN_PAGES            (0x20LL)
+#define NB_OWN_PAGES            (0x1LL)
 #define VM_MEM_OWNPAGES_ADDR    (VM_MEM_MEASURES_ADDR+VM_MEM_MEASURES_SIZE)
-#define VM_MEM_OWNPAGES_SIZE    (PAGES2SIZE(NB_OWN_PAGES))
+#define VM_MEM_OWNPAGES_SIZE    (NB_OWN_PAGES*PAGESIZE)
 
-#define NB_SHARED_PAGES         (0x40LL)
+#define NB_SHARED_PAGES         (0xf00LL)
 #define VM_MEM_SHAREDPAGES_ADDR (VM_MEM_OWNPAGES_ADDR+VM_MEM_OWNPAGES_SIZE)
-#define VM_MEM_SHAREDPAGES_SIZE (PAGES2SIZE(NB_SHARED_PAGES))
+#define VM_MEM_SHAREDPAGES_SIZE (NB_SHARED_PAGES*PAGESIZE)
 
 
 #define PMIO_PRINT_MEASURES         0xABBA
@@ -127,13 +126,9 @@ typedef struct __attribute__((__packed__)) _command_u {
 #define SEG_CODE_EXRDC     0x0E // Execute/Read, conforming
 #define SEG_CODE_EXRDCA    0x0F // Execute/Read, conforming, accessed
 
-#define GDT_CODE_PL0 SEG_DESCTYPE(1) | SEG_PRES(1) | SEG_SAVL(0) | \
-                     SEG_LONG(0)     | SEG_SIZE(1) | SEG_GRAN(1) | \
-                     SEG_PRIV(0)     | SEG_CODE_EXRD
+#define GDT_CODE_PL0 SEG_DESCTYPE(1) | SEG_PRES(1) | SEG_SAVL(0) | SEG_LONG(0) | SEG_SIZE(1) | SEG_GRAN(1) | SEG_PRIV(0) | SEG_CODE_EXRD
 
-#define GDT_DATA_PL0 SEG_DESCTYPE(1) | SEG_PRES(1) | SEG_SAVL(0) | \
-                     SEG_LONG(0)     | SEG_SIZE(1) | SEG_GRAN(1) | \
-                     SEG_PRIV(0)     | SEG_DATA_RDWR
+#define GDT_DATA_PL0 SEG_DESCTYPE(1) | SEG_PRES(1) | SEG_SAVL(0) | SEG_LONG(0) | SEG_SIZE(1) | SEG_GRAN(1) | SEG_PRIV(0) | SEG_DATA_RDWR
 
 // Privilege levels
 #define DPL_USER    0x3
