@@ -18,11 +18,11 @@ payload.elf: $(VMS_BIN) ../common/common.h
 %.bin: %.o.bin
 	$(LD) -b binary -r $^ -o $@
 
-vm_alice.o.bin: $(COMMON_OBJ)
+vm_alice.o.bin: $(COMMON_OBJ) ../common/common.h
 
-vm_charlie.o.bin: $(COMMON_OBJ)
+vm_charlie.o.bin: $(COMMON_OBJ) ../common/common.h
 
-vm_eve.o.bin: $(COMMON_OBJ)
+vm_eve.o.bin: $(COMMON_OBJ) ../common/common.h
 
 %.o.bin: %.o
 	$(LD) -T guest.ld $< $(COMMON_OBJ) -o $@

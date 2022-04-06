@@ -26,7 +26,7 @@
 
 int load_commands(char * filename, vm *vm){
     FILE *fp = fopen(filename, "r");
-    if (!fp) { perror("fopen commands file"); return EXIT_FAILURE;}
+    if (!fp) { perror("fopen commands file"); return -1;}
     command_u data[NUMBEROFROLE];
     command_s cmd;
     command_s * pos[NUMBEROFROLE];

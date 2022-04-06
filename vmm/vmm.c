@@ -93,7 +93,7 @@ int main(int argc, char ** argv)
 	int vmm;                        // VMM fd
     vm vm[NUMBEROFROLE];            // VMs
     pthread_t tid[NUMBEROFROLE];    // VMs thread controller
-//    pthread_t tm;                   // thread time master
+    pthread_t tm;                   // thread time master
     int vcpu_mmap_size;             // mmap size
     int err;
 
@@ -102,6 +102,15 @@ int main(int argc, char ** argv)
     printf("VMM side channel test bench : version (%s) - %s\n", __KERN_VERSION__, __BUILD_TIME__);
     printf("----------------------------------------------------------------------------------------\n\n");
 
+    printf("run (slot %d) : 0x%llx (0x%llx)\nmmio (slot %d) : 0x%llx (0x%llx)\nmeasures (slot %d) : 0x%llx (0x%llx)\nown (slot %d) : 0x%llx (0x%llx)\nshared (slot %d) : 0x%llx (0x%llx)\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_SIZE,
+           MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_SIZE, MEM_SLOT_2, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_SIZE,
+           MEM_SLOT_3, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE, MEM_SLOT_4, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE);
+    printf("run (slot %d)\t\t: 0x%llx\t   - 0x%llx\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE);
+    printf("mmio (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE);
+    printf("pt (slot %d)\t\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_2, VM_MEM_PT_ADDR, VM_MEM_PT_ADDR+VM_MEM_PT_SIZE);
+    printf("measures (slot %d)\t: 0x%llx - 0x%llx\n", MEM_SLOT_3, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_ADDR+VM_MEM_MEASURES_SIZE);
+    printf("own (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_4, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_ADDR+VM_MEM_OWNPAGES_SIZE);
+    printf("shared (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_5, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_ADDR+VM_MEM_SHAREDPAGES_SIZE);
     /* init KSM file descriptors */
     if(ksm_init() != 0) { goto end_ksm;}
 
@@ -130,10 +139,12 @@ int main(int argc, char ** argv)
     vm[VICTIM].vm_role = VICTIM;
     vm[ATTACKER].vm_role = ATTACKER;
     vm[DEFENDER].vm_role = DEFENDER;
-    load_commands("../test_bench.dat", vm);
+    err = load_commands("../test_bench.dat", vm);
+    if (err < 0 ) { perror("no input file can't initialize commands"); exit(EXIT_FAILURE);}
+
 
     /* create a barrier */
-    pthread_barrier_init (&barrier, NULL, NUMBEROFROLE);
+    pthread_barrier_init (&barrier, NULL, NUMBEROFROLE+1);
 
     /* launch VMs threads */
     for( int i = 0; i < NUMBEROFROLE; i++) {
@@ -148,8 +159,8 @@ int main(int argc, char ** argv)
         if (err != 0 ) { perror("failed to launch VM thread"); exit(EXIT_FAILURE);}
 
     }
-//    err = pthread_create( &tm, NULL, time_master, (void*) (vm));
-//    if (err != 0 ) { perror("failed to launch time master thread"); exit(EXIT_FAILURE);}
+    err = pthread_create( &tm, NULL, time_master, (void*) (vm));
+    if (err != 0 ) { perror("failed to launch time master thread"); exit(EXIT_FAILURE);}
 
     /* join */
     for( int i = 0; i < NUMBEROFROLE; i++) {
@@ -157,9 +168,9 @@ int main(int argc, char ** argv)
         pthread_join(tid[i], &iret);
         printf("%s : exit %d\n", vm[i].vm_name, *(int *)((void *)iret));
     }
-//    void *ret_tm = NULL;
-//    pthread_join(tm, ret_tm);
-//    printf("time master : exit %ld\n", (int64_t)((void *)ret_tm));
+    void *ret_tm = NULL;
+    pthread_join(tm, ret_tm);
+    printf("time master : exit %ld\n", (int64_t)((void *)ret_tm));
 
     printf("VMM : free shared pages buffers\n");
     free(shared_page_1);

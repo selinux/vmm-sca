@@ -102,29 +102,27 @@ void *run_vm(void * ptr)
 }
 
 
-//void *time_master(void * ptr)
-//{
-//    vm *vms = (void *)ptr;
-//    int ret = 1;
-//
-//    printf("time master : waiting KSM memory deduplication...\n");
-//
-//    ksm_wait(NB_SHARED_PAGES);
-//
-//    pthread_barrier_wait (&barrier);
-//    printf("time master : running...\n");
-//
-//    translate_vm_addr(&vms[0], VM_MEM_PT_ADDR);
-////    usleep(100000);
-////    *(uint64_t *)(vms[ATTACKER].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_EXIT;   // test unlock VM victim
-//
-////    ioctl(vms[VICTIM].fd_vcpu, KVM_INTERRUPT, 20);
-////    ioctl(vms[VICTIM].fd_vcpu, KVM_GET_TSC_KHZ, 20);
-//
-////    *(uint64_t *)(vms[VICTIM].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_MEASURE;
-////    *(uint64_t *)(vms[VICTIM].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_PRINT_MEASURES;
-////    *(uint64_t *)(vms[VICTIM].mem_run+PRIMITIVE_CMD_ADDR) = PRIMITIVE_EXIT;
-////    usleep(1000000);
-//    ret = 0;
-//    pthread_exit((void*)&ret);
-//}
+void *time_master(void * ptr)
+{
+    vm *vms = (void *)ptr;
+    int ret = 1;
+
+    printf("time master : waiting KSM memory deduplication...\n");
+
+    ksm_wait(NB_SHARED_PAGES);
+
+    printf("pages unshared : %d\n", ksm_ushared_pages());
+
+    pthread_barrier_wait (&barrier);
+    printf("time master : running...\n");
+
+    for(int i = 0; i < 30; i++) {
+        printf("pages shared : %d, sharing %d, unshared %d\n", ksm_shared_pages(), ksm_sharing_pages(), ksm_ushared_pages());
+        usleep(100000);
+    }
+
+    translate_vm_addr(&vms[0], VM_MEM_PT_ADDR);
+
+    ret = 0;
+    pthread_exit((void*)&ret);
+}

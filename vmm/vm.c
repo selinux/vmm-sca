@@ -289,8 +289,11 @@ void vm_init(vm* vm, const char * shared_pages)
     madvise(vm->mem_own, VM_MEM_OWNPAGES_SIZE, MADV_UNMERGEABLE);      // avoid merging
     if (init_memory_slot(vm, vm->mem_own, MEM_SLOT_4, 0, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE) != 0){ perror("VM init memory region own pages KVM_SET_USER_MEMORY_REGION");}
 
-    madvise(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE, MADV_MERGEABLE);  // advise merge
-    if (init_memory_slot(vm, vm->mem_shared, MEM_SLOT_5, 0, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE) != 0){ perror("VM init memory region own pages KVM_SET_USER_MEMORY_REGION");}
+    if (vm->vm_role != DEFENDER) {
+        madvise(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE, MADV_MERGEABLE);  // advise merge
+        if (init_memory_slot(vm, vm->mem_shared, MEM_SLOT_5, 0, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE) != 0){ perror("VM init memory region own pages KVM_SET_USER_MEMORY_REGION");}
+        printf("%s (%s) : transferred %lld shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
+    }
     printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* init vcpu */

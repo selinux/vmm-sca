@@ -10,7 +10,7 @@ help:
 	@echo -e "clean :\t\t\t\t\tclean up everything\n"
 
 .PHONY: all
-all: test_bench.dat
+all:
 	$(MAKE) -C guests all
 	$(MAKE) -C vmm run
 
