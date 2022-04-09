@@ -18,6 +18,9 @@ import struct
 import logging
 from enum import Enum
 import re
+import argparse
+
+import experiments
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -96,59 +99,6 @@ def set_cmd(role, cmd, wait, addr=0, value=0, repeat=0):
     return struct.pack('<IBIQQI', role, cmd, wait, addr, value, repeat)
 
 
-def cmd_measure(role, wait, repeat=1):
-    """ create a measure command
-
-    :param role:
-    :param wait:
-    :return:
-    """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_MEASURE.value, 'wait': wait, 'addr': 0, 'value': 0, 'repeat': repeat}
-
-
-def cmd_read(role, wait, addr, repeat=1):
-    """ create a read command (read at guest address)
-
-    :param role:
-    :param wait:
-    :param addr:
-    :return:
-    """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_READ.value, 'wait': wait, 'addr': addr, 'value': 0, 'repeat': repeat}
-
-
-def cmd_write(role, wait, addr, value, repeat=1):
-    """ create a write command (write value at address)
-
-    :param role:
-    :param wait:
-    :param addr:
-    :param value:
-    :return:
-    """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_WRITE.value, 'wait': wait, 'addr': addr, 'value': value, 'repeat': repeat}
-
-
-def cmd_exit(role, wait):
-    """ create an exit command (exit guest loop)
-
-    :param role:
-    :param wait:
-    :return:
-    """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_EXIT.value, 'wait': wait, 'addr': 0, 'value': 0, 'repeat': 1}
-
-
-def cmd_print_mes(role, wait):
-    """ create a print command
-
-    :param role:
-    :param wait:
-    :return:
-    """
-    return {'role': role.value, 'cmd': Prim_sca.PRIMITIVE_PRINT_MEASURES.value, 'wait': wait, 'addr': 0, 'value': 0, 'repeat': 1}
-
-
 def write_cmd(filename: str, data: {}):
     """ write header+commands to file
 
@@ -173,39 +123,9 @@ def main():
 
     :return: exit status
     """
-    data = {
-        'cmd0': [
-            cmd_measure(Role.VICTIM, 0),
-             cmd_measure(Role.VICTIM, 150000),
-             # cmd_read(Role.VICTIM, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*0)),
-             # cmd_read(Role.VICTIM, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*1)),
-             # cmd_read(Role.VICTIM, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*3)),
-            # cmd_print_mes(Role.VICTIM, 1000),
-            cmd_exit(Role.VICTIM, 0)],
-        'cmd1': [
-            cmd_measure(Role.ATTACKER, 0),
-            cmd_read(Role.ATTACKER, 0, VM_MEM_MEASURES_ADDR),                       # load measures page in cache
-            # cmd_read(Role.ATTACKER, 0, VM_MEM_SHAREDPAGES_ADDR+(0x1000*0), 4),
-            # cmd_print_mes(Role.ATTACKER, 1000),
-            # cmd_exit(Role.ATTACKER, 0)
-            ],
-        'cmd2': [
-            cmd_measure(Role.DEFENDER, 0),
-
-            cmd_exit(Role.DEFENDER, 0)],
-    }
-
-    for i in range(0x100):
-        data['cmd1'].append(cmd_read(Role.ATTACKER, 0, VM_MEM_SHAREDPAGES_ADDR+(0x1000*i)))
-        # data['cmd1'].append(cmd_read(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i)))
-        data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_SHAREDPAGES_ADDR+(0x1000*i), 0xa5a5a5))
-        data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i), 0xa5a5a5))
-        # data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i), 0x5a5a5a))
-        # data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i), 0x5a5a5a))
-        # data['cmd1'].append(cmd_write(Role.ATTACKER, 0, VM_MEM_OWNPAGES_ADDR+(0x1000*i), 0x5a5a5a))
-    # data['cmd1'].append(cmd_read(Role.ATTACKER, 0, VM_MEM_SHAREDPAGES_ADDR+(0x1000*i), 2))
-    data['cmd1'].append(cmd_exit(Role.ATTACKER, 0))
-
+    parser = argparse.ArgumentParser(description='Metaheuristics for Optimization TP Series 5 : PSO.')
+    parser.add_argument('-f', '--file', help='file to parse', type=str, required=True)
+    args = parser.parse_args()
 
     res = read_c_header("common/common.h")
     for k,v in res.items():
@@ -237,8 +157,12 @@ def main():
     # if VM_MEM_MEASURES_SIZE//8 < NB_SAMPLES:
     #     log.error("Measure memory too small")
 
-    log.debug("save file : test_bench.dat")
-    write_cmd("test_bench.dat", data)
+    log.debug("save file : {}".format(args.file))
+    data, nb_of_timestamps = experiments.shared_cow(10000, VM_MEM_SHAREDPAGES_SIZE, VM_MEM_SHAREDPAGES_ADDR)
+    # data, nb_of_timestamps = experiments.read_own(10000, VM_MEM_OWNPAGES_SIZE, VM_MEM_OWNPAGES_ADDR)
+    assert nb_of_timestamps < VM_MEM_MEASURES_SIZE/8, 'Too many measures increase VMs memory'
+
+    write_cmd(args.file, data)
 
     exit(EX_OK)
 
