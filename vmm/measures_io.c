@@ -70,7 +70,7 @@ int load_commands(char * filename, vm *vm){
 int save_measures(char* filename, uint64_t* measures, uint64_t nb_measures){
     uint64_t * _m = measures;
     FILE *fp = fopen(filename, "w");
-    if (!fp) { perror("fopen commands file"); return EXIT_FAILURE;}
+    if (!fp) { perror("fopen commands file"); return -1;}
 
     for(uint64_t i = 0; i < nb_measures; i++){
         size_t ret = fwrite(_m++, sizeof(uint64_t), 1, fp);

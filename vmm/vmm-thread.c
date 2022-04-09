@@ -33,6 +33,7 @@
 
 
 extern pthread_barrier_t   barrier; // wait until all VMs are started
+extern struct arguments arguments;
 
 void *run_vm(void * ptr)
 {
@@ -42,9 +43,9 @@ void *run_vm(void * ptr)
     uint64_t nb_cmd = vm->nb_cmd;
     uint64_t nb_timestamp = 0;
 
-    printf("%s : waiting...\n", vm->vm_name);
+    if(arguments.verbose) printf("%s : waiting...\n", vm->vm_name);
     pthread_barrier_wait (&barrier);
-    printf("%s : running...\n", vm->vm_name);
+    if(arguments.verbose) printf("%s : running...\n", vm->vm_name);
 
 	struct kvm_regs regs;
 	uint64_t memval = 0;
@@ -107,18 +108,18 @@ void *time_master(void * ptr)
     vm *vms = (void *)ptr;
     int ret = 1;
 
-    printf("time master : waiting KSM memory deduplication...\n");
+    if(arguments.verbose) printf("time master : waiting KSM memory deduplication...\n");
 
     ksm_wait(NB_SHARED_PAGES);
 
-    printf("pages unshared : %d\n", ksm_ushared_pages());
+    if(arguments.verbose) printf("pages unshared : %d\n", ksm_ushared_pages());
 
     pthread_barrier_wait (&barrier);
-    printf("time master : running...\n");
+    if(arguments.verbose) printf("time master : running...\n");
 
-    for(int i = 0; i < 30; i++) {
+    for(int i = 0; i < 10; i++) {
         printf("pages shared : %d, sharing %d, unshared %d\n", ksm_shared_pages(), ksm_sharing_pages(), ksm_ushared_pages());
-        usleep(100000);
+        usleep(1000000);
     }
 
     translate_vm_addr(&vms[0], VM_MEM_PT_ADDR);

@@ -29,6 +29,7 @@
 #include "vm.h"
 
 
+extern struct arguments arguments;
 
 /** Initialize paging PML4 pages tables in VM memory
  *
@@ -37,7 +38,7 @@
 static void init_pages_tables(vm* vm){
 
     /* page table ref : https://wiki.osdev.org/Paging */
-    printf("%s (%s) : init memory paging  (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
+    if(arguments.verbose) printf("%s (%s) : init memory paging  (64-bit)\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* page map level 4 */
     uint64_t *pml4 = (uint64_t *)vm->mem_pages_tables;
@@ -262,7 +263,7 @@ void vm_init(vm* vm, const char * shared_pages)
     while(_s < NB_OWN_PAGES*PAGESIZE) {
         _s += getrandom(vm->mem_own, (NB_OWN_PAGES*PAGESIZE) - _s, GRND_NONBLOCK);
     }
-    printf("%s (%s) : fill %lld pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
+    if(arguments.verbose) printf("%s (%s) : fill %lld pages with (own) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_OWN_PAGES);
 
     /* VMs shared pages for read access, flush, COW,... tests */
     /* shared pages */
@@ -291,24 +292,24 @@ void vm_init(vm* vm, const char * shared_pages)
     if (vm->vm_role != DEFENDER) {
         madvise(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE, MADV_MERGEABLE);  // advise merge
         if (init_memory_slot(vm, vm->mem_shared, MEM_SLOT_5, 0, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE) != 0){ perror("VM init memory region own pages KVM_SET_USER_MEMORY_REGION");}
-        printf("%s (%s) : transferred %lld shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
+        if(arguments.verbose) printf("%s (%s) : transferred %lld shared pages with (common) random data\n", vm->vm_name, vm_role(vm->vm_role), NB_SHARED_PAGES);
     }
-    printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
+    if(arguments.verbose) printf("%s (%s) : mmap memory slots\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* init vcpu */
     init_vcpu(vm);
 
     /* get special registers */
     struct kvm_sregs sregs;
-    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS2, &sregs) < 0) { perror("KVM_GET_SREGS");	exit(1);}
+    if (ioctl(vm->fd_vcpu, KVM_GET_SREGS, &sregs) < 0) { perror("KVM_GET_SREG");	exit(1);}
 
     /* init 64bits long mode */
     init_long_mode(&sregs);
-    printf("%s (%s) : init vcpu long mode (64-bit) with paging (4Gb identity mapped)\n", vm->vm_name, vm_role(vm->vm_role));
+    if(arguments.verbose) printf("%s (%s) : init vcpu long mode (64-bit) with paging (4Gb identity mapped)\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* init segments */
     init_segments(&sregs);
-    printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
+    if(arguments.verbose) printf("%s (%s) : init vcpu segments\n", vm->vm_name, vm_role(vm->vm_role));
 
     /* set special registers */
     if (ioctl(vm->fd_vcpu, KVM_SET_SREGS, &sregs) < 0) { perror("KVM_SET_SREGS"); exit(1);}
@@ -317,7 +318,7 @@ void vm_init(vm* vm, const char * shared_pages)
     struct kvm_regs regs;
     init_registers(&regs);
     if (ioctl(vm->fd_vcpu, KVM_SET_REGS, &regs) < 0) { perror("KVM_SET_REGS"); exit(1);}
-    printf("%s (%s) : init vcpu registers (rip,rsp)\n", vm->vm_name, vm_role(vm->vm_role));
+    if(arguments.debug) printf("%s (%s) : init vcpu registers (rip,rsp)\n", vm->vm_name, vm_role(vm->vm_role));
 
     struct kvm_mp_state mp_state;
     if (ioctl(vm->fd_vcpu, KVM_GET_MP_STATE, &mp_state) < 0) { perror("KVM_GET_MP_STATE"); exit(1);}
@@ -329,7 +330,7 @@ void vm_init(vm* vm, const char * shared_pages)
 
     /* print TSC frequency from guest pov */
     int tsc_freq = ioctl(vm->fd_vcpu, KVM_GET_TSC_KHZ, 0);
-    printf("%s : TSC %d MHz\n", vm->vm_name, tsc_freq/1000);
+    if(arguments.debug) printf("%s : TSC %d MHz\n", vm->vm_name, tsc_freq/1000);
 }
 
 
@@ -357,7 +358,7 @@ struct kvm_translation translate_vm_addr(vm* vm, const long long unsigned int ad
  */
 void vm_destroy(vm* vm){
 
-    printf("VMM : unmap %s memory regions\n", vm->vm_name);
+    if(arguments.debug) printf("VMM : unmap %s memory regions\n", vm->vm_name);
     munmap(vm->mem_run, VM_MEM_RUN_SIZE);
     munmap(vm->mem_pages_tables, VM_MEM_PT_SIZE);
     munmap(vm->mem_mmio, VM_MEM_MMIO_SIZE);
@@ -365,7 +366,7 @@ void vm_destroy(vm* vm){
     munmap(vm->mem_own, VM_MEM_OWNPAGES_SIZE);
     munmap(vm->mem_shared, VM_MEM_SHAREDPAGES_SIZE);
 
-    printf("VMM : free %s commands\n", vm->vm_name);
+    if(arguments.debug) printf("VMM : free %s commands\n", vm->vm_name);
     free(vm->cmds);
 }
 

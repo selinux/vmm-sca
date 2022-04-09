@@ -43,5 +43,13 @@ typedef struct my_vm {
     uint64_t nb_cmd;
 } vm;
 
+/* Used by main to communicate with parse_opt. */
+struct arguments
+{
+  char *args[2];                /* arg1 & arg2 */
+  int debug;
+  int verbose;
+};
+
 
 #endif

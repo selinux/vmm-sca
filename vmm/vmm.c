@@ -25,6 +25,7 @@
 #include <linux/kvm.h>
 #include <pthread.h>
 #include <sys/random.h>
+#include <argp.h>
 #include "../common/common.h"
 
 #include "vmm.h"
@@ -36,7 +37,61 @@
 #include "../version.h"
 
 
-pthread_barrier_t   barrier; // wait until all VMs are started
+/* Program documentation */
+static char doc[512]; // = "Argp example #3 -- a program with options and arguments using argp";
+
+/* A description of the arguments */
+static char args_doc[] = "INPUTFILE OUTPUTFILE";
+
+/**
+ * The options available
+ */
+static struct argp_option options[] = {
+  {"verbose",  'v', 0,      0,  "Produce verbose output", 0},
+  {"debug",    'd', 0,      0,  "Produce debug output", 0},
+  {"quiet",    'q', 0,      0,  "Don't produce any output", 0},
+  {0 }
+};
+
+/* Parse a single option. */
+static error_t parse_opt (int key, char *arg, struct argp_state *state)
+{
+    /* Get the input argument from argp_parse, which we
+     know is a pointer to our arguments structure. */
+    struct arguments *arguments = state->input;
+
+    switch (key) {
+        case 'v':
+            arguments->verbose = 1;
+            break;
+        case 'd':
+            arguments->debug = 1;
+            break;
+        case 'q':
+            arguments->verbose = 0;
+            break;
+
+    case ARGP_KEY_END:
+        if (state->arg_num < 2) /* Not enough arguments. */
+            argp_usage (state);
+        break;
+
+    case ARGP_KEY_ARG:
+        if (state->arg_num >= 2) /* Too many arguments. */
+            argp_usage (state);
+        arguments->args[state->arg_num] = arg;
+        break;
+
+    default:
+        return ARGP_ERR_UNKNOWN;
+    }
+    return 0;
+}
+
+/* Our argp parser. */
+static struct argp argp = { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
+
+struct arguments arguments = {.debug=0, .verbose=0};
 
 
 /** initialize KVM
@@ -82,6 +137,8 @@ static int init_shared_pages(char** mem, const uint size){
     return EXIT_SUCCESS;
 }
 
+pthread_barrier_t   barrier; // wait until all VMs are started
+
 /** main VMM
  *
  * @param argc unused
@@ -97,20 +154,39 @@ int main(int argc, char ** argv)
     int vcpu_mmap_size;             // mmap size
     int err;
 
-    printf("running %s\n", argv[argc-argc]);
-    printf("----------------------------------------------------------------------------------------\n");
-    printf("VMM side channel test bench : version (%s) - %s\n", __KERN_VERSION__, __BUILD_TIME__);
-    printf("----------------------------------------------------------------------------------------\n\n");
+    /* Default values. */
+    snprintf(doc, 512, "%s\nVMM side channel test bench : version (%s) - %s\n%s\n",
+             "----------------------------------------------------------------------------------------",
+             __KERN_VERSION__, __BUILD_TIME__,
+             "----------------------------------------------------------------------------------------");
+    argp_parse(&argp, argc, argv, 0, 0, &arguments);
+    if(arguments.debug) {
+        printf ("INPUTFILE = %s\nOUTPUTFILE = %s\n"
+            "VERBOSE = %s\nSILENT = %s\n", arguments.args[0], arguments.args[1],
+          arguments.verbose ? "yes" : "no", arguments.debug ? "yes" : "no");
+    }
 
-    printf("run (slot %d) : 0x%llx (0x%llx)\nmmio (slot %d) : 0x%llx (0x%llx)\nmeasures (slot %d) : 0x%llx (0x%llx)\nown (slot %d) : 0x%llx (0x%llx)\nshared (slot %d) : 0x%llx (0x%llx)\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_SIZE,
-           MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_SIZE, MEM_SLOT_2, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_SIZE,
-           MEM_SLOT_3, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE, MEM_SLOT_4, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_SIZE);
-    printf("run (slot %d)\t\t: 0x%llx\t   - 0x%llx\n", MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_ADDR+VM_MEM_RUN_SIZE);
-    printf("mmio (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE);
-    printf("pt (slot %d)\t\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_2, VM_MEM_PT_ADDR, VM_MEM_PT_ADDR+VM_MEM_PT_SIZE);
-    printf("measures (slot %d)\t: 0x%llx - 0x%llx\n", MEM_SLOT_3, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_ADDR+VM_MEM_MEASURES_SIZE);
-    printf("own (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_4, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_ADDR+VM_MEM_OWNPAGES_SIZE);
-    printf("shared (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_5, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_SHAREDPAGES_ADDR+VM_MEM_SHAREDPAGES_SIZE);
+
+    if(arguments.verbose) {
+        printf("run (slot %d) : 0x%llx (0x%llx)\nmmio (slot %d) : 0x%llx (0x%llx)\nmeasures (slot %d) : 0x%llx (0x%llx)\nown (slot %d) : 0x%llx (0x%llx)\nshared (slot %d) : 0x%llx (0x%llx)\n",
+               MEM_SLOT_0, VM_MEM_RUN_ADDR, VM_MEM_RUN_SIZE,
+               MEM_SLOT_1, VM_MEM_MMIO_ADDR, VM_MEM_MMIO_SIZE, MEM_SLOT_2, VM_MEM_MEASURES_ADDR, VM_MEM_MEASURES_SIZE,
+               MEM_SLOT_3, VM_MEM_OWNPAGES_ADDR, VM_MEM_OWNPAGES_SIZE, MEM_SLOT_4, VM_MEM_SHAREDPAGES_ADDR,
+               VM_MEM_SHAREDPAGES_SIZE);
+    }
+    if(arguments.debug) {
+        printf("run (slot %d)\t\t: 0x%llx\t   - 0x%llx\n", MEM_SLOT_0, VM_MEM_RUN_ADDR,
+               VM_MEM_RUN_ADDR + VM_MEM_RUN_SIZE);
+        printf("mmio (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_1, VM_MEM_MMIO_ADDR,
+               VM_MEM_MMIO_ADDR + VM_MEM_MMIO_SIZE);
+        printf("pt (slot %d)\t\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_2, VM_MEM_PT_ADDR, VM_MEM_PT_ADDR + VM_MEM_PT_SIZE);
+        printf("measures (slot %d)\t: 0x%llx - 0x%llx\n", MEM_SLOT_3, VM_MEM_MEASURES_ADDR,
+               VM_MEM_MEASURES_ADDR + VM_MEM_MEASURES_SIZE);
+        printf("own (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_4, VM_MEM_OWNPAGES_ADDR,
+               VM_MEM_OWNPAGES_ADDR + VM_MEM_OWNPAGES_SIZE);
+        printf("shared (slot %d)\t\t: 0x%llx - 0x%llx\n", MEM_SLOT_5, VM_MEM_SHAREDPAGES_ADDR,
+               VM_MEM_SHAREDPAGES_ADDR + VM_MEM_SHAREDPAGES_SIZE);
+    }
     /* init KSM file descriptors */
     if(ksm_init() != 0) { goto end_ksm;}
 
@@ -125,12 +201,12 @@ int main(int argc, char ** argv)
     if (vcpu_mmap_size < (int)sizeof(struct kvm_run)) { perror("KVM_GET_VCPU_MMAP_SIZE unexpectedly small"); exit(1);}
 
     /* init VMM pages to be transferred to VMs */
-    printf("VMM : filled %lld pages with random data to be shared between VMs\n", NB_SHARED_PAGES);
+    if(arguments.verbose) printf("VMM : filled %lld pages with random data to be shared between VMs\n", NB_SHARED_PAGES);
     char * shared_page_1 = NULL;
     err = init_shared_pages(&shared_page_1, NB_SHARED_PAGES);
     if (err < 0 ) { perror("failed to init buffer"); exit(EXIT_FAILURE);}
 
-    printf("VMM : %d VMs initialized...launch VMs threads\n\n", NUMBEROFROLE);
+    if(arguments.verbose) printf("VMM : %d VMs initialized...launch VMs threads\n\n", NUMBEROFROLE);
 
     /* pretty name VMs */
     strncpy(vm[VICTIM].vm_name, "VM alice",  256);
@@ -139,7 +215,7 @@ int main(int argc, char ** argv)
     vm[VICTIM].vm_role = VICTIM;
     vm[ATTACKER].vm_role = ATTACKER;
     vm[DEFENDER].vm_role = DEFENDER;
-    err = load_commands("../test_bench.dat", vm);
+    err = load_commands(arguments.args[0], vm);
     if (err < 0 ) { perror("no input file can't initialize commands"); exit(EXIT_FAILURE);}
 
 
@@ -170,9 +246,9 @@ int main(int argc, char ** argv)
     }
     void *ret_tm = NULL;
     pthread_join(tm, ret_tm);
-    printf("time master : exit %ld\n", (int64_t)((void *)ret_tm));
+    if(arguments.verbose) printf("time master : exit %ld\n", (int64_t)((void *)ret_tm));
 
-    printf("VMM : free shared pages buffers\n");
+    if(arguments.verbose) printf("VMM : free shared pages buffers\n");
     free(shared_page_1);
     for( int i = 0; i < NUMBEROFROLE; i++) {
         vm_destroy((vm+i));
