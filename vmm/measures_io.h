@@ -9,7 +9,6 @@
 #include "vmm.h"
 
 int load_commands(char * filename, vm *vm);
-int save_commands(char* filename, command_u *cmd, uint64_t size);
-int save_measures(char* filename, uint64_t* measures, uint64_t nb_measures);
+int save_measures(char* filename, vm* vm);
 
 #endif

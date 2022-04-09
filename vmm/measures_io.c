@@ -67,14 +67,41 @@ int load_commands(char * filename, vm *vm){
 }
 
 
-int save_measures(char* filename, uint64_t* measures, uint64_t nb_measures){
-    uint64_t * _m = measures;
+int save_measures(char* filename, vm* vm){
     FILE *fp = fopen(filename, "w");
     if (!fp) { perror("fopen commands file"); return -1;}
+    size_t ret;
 
-    for(uint64_t i = 0; i < nb_measures; i++){
-        size_t ret = fwrite(_m++, sizeof(uint64_t), 1, fp);
-        if (ret != 1) { perror("fwrite failed to write timestamps file"); return -1;}
+    for(int v=0; v < NUMBEROFROLE; v++) {
+        uint64_t * _m = (vm+v)->mem_measures;
+        command_s * _cmd = (vm+v)->cmds;
+        for (uint64_t i = 0; i < (vm+v)->nb_cmd; i++) {
+            timestamp_s t ={.id=i,.cmd = _cmd->cmd, .vm_id = v, .wait = _cmd->wait, .ts= {0,0,0,0,0}};
+            switch (_cmd->cmd) {
+                case PRIMITIVE_WAIT:
+                case PRIMITIVE_EXIT:
+                    ret = fwrite(&t, sizeof(timestamp_s), 1, fp);
+                    if (ret != 1) { perror("fwrite failed to write timestamps file"); return -1;}
+                    _cmd++;
+                    continue;
+                case PRIMITIVE_MEASURE:
+                    t.ts[0] = *(_m++);
+                    ret = fwrite(&t, sizeof(timestamp_s), 1, fp);
+                    if (ret != 1) { perror("fwrite failed to write timestamps file"); return -1;}
+                    _cmd++;
+                    continue;
+                case PRIMITIVE_READ:
+                case PRIMITIVE_WRITE:
+                    t.ts[0] = *(_m++);
+                    t.ts[1] = *(_m++);
+                    ret = fwrite(&t, sizeof(timestamp_s), 1, fp);
+                    if (ret != 1) { perror("fwrite failed to write timestamps file"); return -1;}
+                    _cmd++;
+                    continue;
+                default:
+                    continue;
+            }
+        }
     }
     return 0;
 }

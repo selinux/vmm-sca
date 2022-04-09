@@ -92,12 +92,6 @@ void *run_vm(void * ptr)
                (unsigned long long)memval);
         ret = -1;
     }
-    char filename[512];
-    char time_buff[32];
-    time_t timer = time(NULL);
-    strftime (time_buff, 32, "%Y.%m.%d-%H:%M:%S", localtime (&timer));
-    snprintf(filename, 512, "../results/%s-%s.dat", vm->vm_name, time_buff);
-    save_measures(filename, vm->mem_measures, nb_timestamp);
 
     pthread_exit((void*)&ret);
 }
@@ -119,7 +113,7 @@ void *time_master(void * ptr)
 
     for(int i = 0; i < 10; i++) {
         printf("pages shared : %d, sharing %d, unshared %d\n", ksm_shared_pages(), ksm_sharing_pages(), ksm_ushared_pages());
-        usleep(1000000);
+        usleep(100000);
     }
 
     translate_vm_addr(&vms[0], VM_MEM_PT_ADDR);

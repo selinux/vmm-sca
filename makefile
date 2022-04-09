@@ -10,13 +10,13 @@ help:
 	@echo -e "clean :\t\t\t\t\tclean up everything\n"
 
 .PHONY: all
-all:
+all: testbench.dat
 	$(MAKE) -C guests all
 	$(MAKE) -C vmm run
 
-test_bench.dat: tools/gen_measures.py
+testbench.dat: tools/gen_measures.py tools/gen_measures.py
 	@echo generate test_bench commands
-	@python tools/gen_measures.py
+	@python tools/gen_measures.py -f $@
 
 update_version:
 	./gen_version.sh version.h

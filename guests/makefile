@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-ffreestanding -fno-pic -fno-stack-protector -no-pie -O3
+CFLAGS=-ffreestanding -fno-pic -fno-stack-protector -no-pie #-O3
 WFLAGS=-Wall -Wextra
 DEBUG=-g
 ARCH=-m64

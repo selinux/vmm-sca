@@ -248,6 +248,10 @@ int main(int argc, char ** argv)
     pthread_join(tm, ret_tm);
     if(arguments.verbose) printf("time master : exit %ld\n", (int64_t)((void *)ret_tm));
 
+    save_measures(arguments.args[1], vm);
+    timestamp_s ts = {.cmd=PRIMITIVE_READ, .wait=0, .vm_id=VICTIM, .id=1, .ts[0] = 1, .ts[1] = 3, .ts[2] = 3};
+
+    printf("%lu - %lu - %lu - %lu - %lu\n", sizeof(ts.id), sizeof(ts.cmd), sizeof(ts.vm_id), sizeof(ts.wait), sizeof(ts.ts));
     if(arguments.verbose) printf("VMM : free shared pages buffers\n");
     free(shared_page_1);
     for( int i = 0; i < NUMBEROFROLE; i++) {

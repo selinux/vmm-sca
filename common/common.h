@@ -31,7 +31,7 @@
 #define VM_MEM_PT_ADDR          (VM_MEM_MMIO_ADDR+VM_MEM_MMIO_SIZE)
 #define VM_MEM_PT_SIZE          ((NB_PT_PML4_PAGES+NB_PT_PDPT_PAGES+NB_PT_PD_PAGES+NB_PTE_PAGES+1)*PAGESIZE)
 
-#define NB_SAMPLES              (0xf000LL)
+#define NB_SAMPLES              (0x8000LL)
 #define VM_MEM_MEASURES_ADDR    (VM_MEM_PT_ADDR+VM_MEM_PT_SIZE)
 #define VM_MEM_MEASURES_SIZE    (((NB_SAMPLES+511LL)/512LL)*PAGESIZE)
 //#define VM_MEM_MEASURES_SIZE    (((NB_SAMPLES+511LL)/512LL)*PAGESIZE)
@@ -98,6 +98,14 @@ typedef struct __attribute__((__packed__)) _command_u {
         command_s cmd;
     };
 } command_u;
+
+typedef struct __attribute__((__packed__)) _timestamp_s {
+    uint32_t id;        // cmd idx
+    uint8_t cmd;        // cmd type
+    uint8_t vm_id;      // vm
+    useconds_t wait;    // delay
+    uint64_t ts[5];     // timestamps
+} timestamp_s;
 
 // Each define here is for a specific flag in the descriptor.
 // Refer to the intel documentation for a description of what each one does.
