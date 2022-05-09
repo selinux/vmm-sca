@@ -124,43 +124,43 @@ def main():
     :return: exit status
     """
     parser = argparse.ArgumentParser(description='Metaheuristics for Optimization TP Series 5 : PSO.')
-    parser.add_argument('-f', '--file', help='file to parse', type=str, required=True)
+    parser.add_argument('file', help='file to parse', type=str)
+    parser.add_argument('exp', help='experiment', type=int)
     args = parser.parse_args()
 
+    """parse C header to reflect global variables states"""
     res = read_c_header("common/common.h")
-    for k,v in res.items():
+    for k, v in res.items():
         # print("input : "+k+" = "+v)
         try:
             exec("global {}; {} = {}".format(k, k, v))
-            # exec(k+' = '+eval(v))
-            # print("yep : global "+k+" = "+v)
             # print(hex(VM_MEM_SHAREDPAGES_ADDR), flush=True)
 
         except :
             # print("fail : global "+k+" = "+v)
             pass
+    # read alone
+    if args.exp == 0:
+        data, nb_of_timestamps = experiments.exp0(1000, VM_MEM_OWNPAGES_SIZE, VM_MEM_OWNPAGES_ADDR)
+    # read both independently
+    if args.exp == 1:
+        data, nb_of_timestamps = experiments.exp1(1000, VM_MEM_OWNPAGES_SIZE, VM_MEM_OWNPAGES_ADDR)
+    # read both in concurrence
+    if args.exp == 2:
+        data, nb_of_timestamps = experiments.exp1(1000, VM_MEM_SHAREDPAGES_SIZE, VM_MEM_SHAREDPAGES_ADDR)
+    # COW only
+    if args.exp == 3:
+        data, nb_of_timestamps = experiments.exp2(1000, VM_MEM_SHAREDPAGES_SIZE, VM_MEM_SHAREDPAGES_ADDR)
+    # COW with interactions
+    if args.exp == 4:
+        data, nb_of_timestamps = experiments.exp3(1000, VM_MEM_SHAREDPAGES_SIZE, VM_MEM_SHAREDPAGES_ADDR, VM_MEM_OWNPAGES_SIZE, VM_MEM_OWNPAGES_ADDR)
+    # VM time
+    if args.exp == 5:
+        data, nb_of_timestamps = experiments.exp4(100000, VM_MEM_SHAREDPAGES_ADDR)
 
-    # print(hex(VM_MEM_RUN_ADDR), flush=True)
-    # print(hex(VM_MEM_RUN_SIZE), flush=True)
-    # print(hex(VM_MEM_MMIO_ADDR), flush=True)
-    # print(hex(VM_MEM_MMIO_SIZE), flush=True)
-    # print(hex(VM_MEM_PT_ADDR), flush=True)
-    # print(hex(VM_MEM_PT_SIZE), flush=True)
-    # print("samples : "+str(NB_SAMPLES), flush=True)
-    # print(hex(VM_MEM_MEASURES_ADDR), flush=True)
-    # print(hex(VM_MEM_MEASURES_SIZE), flush=True)
-    # print(hex(VM_MEM_OWNPAGES_ADDR), flush=True)
-    # print(hex(VM_MEM_OWNPAGES_SIZE), flush=True)
-    # print(hex(VM_MEM_SHAREDPAGES_ADDR), flush=True)
-    # print(hex(VM_MEM_SHAREDPAGES_SIZE), flush=True)
-
-    # if VM_MEM_MEASURES_SIZE//8 < NB_SAMPLES:
-    #     log.error("Measure memory too small")
+    assert nb_of_timestamps < VM_MEM_MEASURES_SIZE/8, 'Too many measures increase VMs memory'
 
     log.debug("save file : {}".format(args.file))
-    data, nb_of_timestamps = experiments.shared_cow(10000, VM_MEM_SHAREDPAGES_SIZE, VM_MEM_SHAREDPAGES_ADDR)
-    # data, nb_of_timestamps = experiments.read_own(10000, VM_MEM_OWNPAGES_SIZE, VM_MEM_OWNPAGES_ADDR)
-    assert nb_of_timestamps < VM_MEM_MEASURES_SIZE/8, 'Too many measures increase VMs memory'
 
     write_cmd(args.file, data)
 

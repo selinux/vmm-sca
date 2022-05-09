@@ -1,5 +1,6 @@
 QEMU=qemu-system-x86_64 -enable-kvm -m 128
 ISO_NAME=tools/bare_metal_guest.iso
+EXP=experiments/exp0.dat experiments/exp1.dat experiments/exp2.dat experiments/exp3.dat experiments/exp4.dat
 
 help:
 	@echo -e "Available targets:\n"
@@ -13,17 +14,42 @@ help:
 all: testbench.dat
 	$(MAKE) -C guests all
 	$(MAKE) -C vmm run
+	@python tools/print_measures.py -f results/output.dat
 
-testbench.dat: tools/gen_measures.py tools/gen_measures.py
+testbench.dat: tools/gen_measures.py
 	@echo generate test_bench commands
 	@python tools/gen_measures.py -f $@
 
 update_version:
 	./gen_version.sh version.h
 
+print_measures:
+	@python tools/print_measures.py results/output.dat
+
+experiments: $(EXP)
+
+experiments/exp0.dat:
+	@python tools/gen_measures.py $@ 0
+
+experiments/exp1.dat:
+	@python tools/gen_measures.py $@ 1
+
+experiments/exp2.dat:
+	@python tools/gen_measures.py $@ 2
+
+experiments/exp3.dat:
+	@python tools/gen_measures.py $@ 3
+
+experiments/exp4.dat:
+	@python tools/gen_measures.py $@ 4
+
+experiments/exp5.dat:
+	@python tools/gen_measures.py $@ 5
+
 .PHONY: clean
 clean:
 	@rm -f test_bench.dat
+	@rm -f $(EXP)
 	$(MAKE) -C guests clean
 	$(MAKE) -C vmm clean
 

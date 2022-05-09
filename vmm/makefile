@@ -14,7 +14,8 @@ PAYLOAD=../guests/payload.elf
 COMMON=../common/common.h
 
 run: $(OUTPUT) $(PAYLOAD)
-	@./$(OUTPUT)  ../testbench.dat ../results/output.dat -v
+	@./$(OUTPUT)
+	#@./$(OUTPUT)  ../testbench.dat ../results/output.dat -v
 
 vmm-sca: $(OBJ) $(PAYLOAD) $(COMMON)
 	$(MAKE) -C ../guests payload.elf
