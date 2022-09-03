@@ -11,6 +11,7 @@ __copyright__ = ""
 __license__ = "GPL V2"
 __status__ = "VMM side channel attack pretty printer"
 
+import math
 import os
 from os import EX_OK, path, getcwd
 from sys import exit
@@ -298,6 +299,125 @@ def plot_exp5(mes):
     plt.show()
 
 
+def plot_exp6(filename):
+
+    freq = 1/3.5
+    y = []
+    struct_fmt = '<Q'
+    struct_len = struct.calcsize(struct_fmt)
+    with open(filename, 'rb') as f:
+        bytes = f.read(struct_len)
+        while bytes:
+            y.append(struct.unpack(struct_fmt, bytes)[0]/1e6)
+            bytes = f.read(struct_len)
+
+    # y = y[1:]
+    output = [idx for idx, element in enumerate(y) if element > 2]
+    o2 = [y[i] for i in output]
+    print(output)
+    print(o2)
+    a = [y[0]]
+    for i in range(1, len(y)):
+        a.append(math.log(a[i-1]+y[i]))
+    # y = [sum(y[:i]) for i in range(0, len(y))]
+    # plot
+    # fig, (ax1, ax2, ax3) = plt.subplots(3, 1, sharey=True)
+    fig, ax = plt.subplots(1, 1, sharey=True)
+    x = list(range(len(y)))
+    ax.plot(x, a)
+
+    plt.title('Time (time counter) from VMs point of view Qemu')
+    plt.xlabel('measures in time (period ~3.5ms)')
+    plt.ylabel('number of cycle from previous measures')
+
+    print("="*40+"\nnumber of cycle at 3.5Ghz\n"+"-"*40)
+    print("write : means {:.2f}, stdev {:.2f}".format(mean(y), stdev(y)))
+    plt.xlim([40000, 41000])
+    # plt.ylim([0.715e11, 0.717e11])
+    plt.show()
+
+
+def plot_exp7(filename1, filename2):
+
+    freq = 1/3.5
+    y = []
+    with open(filename1, 'rb') as f:
+        lines = f.readlines()
+        y1 = [int(line.rstrip()) for line in lines]
+    with open(filename2, 'rb') as f:
+        lines = f.readlines()
+        y2 = [int(line.rstrip()) for line in lines]
+
+    # y = [sum(y[:i]) for i in range(0, len(y))]
+    # plot
+    # fig, (ax1, ax2, ax3) = plt.subplots(3, 1, sharey=True)
+    fig, ax = plt.subplots(1, 1, sharey=True)
+
+    l = len(y1) if len(y1) < len(y2) else len(y2)
+    y1 = y1[:l] if len(y1) > l else y1
+    y2 = y2[:l] if len(y2) > l else y2
+    x = list(range(l))
+    ax.plot(x, y1, y2)
+
+    plt.title('Shared pages in time from two identical VMs (alpine)')
+    plt.xlabel('time (s)')
+    plt.ylabel('shared pages')
+    ax.legend(['amd Ryzen', 'intel i7'], loc='center right')
+    plt.xlim([0, 410])
+    # plt.ylim([0.715e11, 0.717e11])
+    plt.show()
+
+
+def plot_exp8(filename1, filename2):
+
+    freq = 1/3.5
+    y = []
+    with open(filename1, 'rb') as f:
+        lines = f.readlines()
+        y1 = [int(line.rstrip()) for line in lines]
+    with open(filename2, 'rb') as f:
+        lines = f.readlines()
+        y2 = [int(line.rstrip()) for line in lines]
+
+    fig, ax = plt.subplots(1, 1, sharey=True)
+
+    l = len(y1) if len(y1) < len(y2) else len(y2)
+    y1 = y1[:l] if len(y1) > l else y1
+    y2 = y2[:l] if len(y2) > l else y2
+    x = list(range(l))
+    ax.plot(x, y1, y2)
+
+    plt.title('Shared pages in time Qemu only in BIOS mode or EFI mode')
+    plt.xlabel('time (s)')
+    plt.ylabel('shared pages')
+    ax.legend(['EFI', 'BIOS'], loc='center right')
+    plt.xlim([0, 200])
+    # plt.ylim([0.715e11, 0.717e11])
+    plt.show()
+
+
+def plot_exp9(filename1):
+
+    freq = 1/3.5
+    y = []
+    with open(filename1, 'rb') as f:
+        lines = f.readlines()
+        y = [int(line.rstrip()) for line in lines]
+
+    fig, ax = plt.subplots(1, 1, sharey=True)
+
+    x = list(range(len(y)))
+    ax.plot(x, y)
+
+    plt.title('Shared pages in time Qemu activity effect')
+    plt.xlabel('time (s)')
+    plt.ylabel('shared pages')
+    # ax.legend(['EFI', 'BIOS'], loc='center right')
+    plt.xlim([0, 200])
+    # plt.ylim([0.715e11, 0.717e11])
+    plt.show()
+
+
 def main():
     """generate
 
@@ -307,7 +427,10 @@ def main():
     parser.add_argument('file', help='file to parse', type=str)
     args = parser.parse_args()
 
+    # try:
     res = read_timestamp(args.file)
+    # except:
+    #     pass
 
     # for vm in range(0, len(res)):
     #     for i in range(0, len(res[vm])):
@@ -326,6 +449,14 @@ def main():
         plot_exp4(res[1], 1)
     if 'exp5' in args.file:
         plot_exp5(res)
+    if 'exp6' in args.file:
+        plot_exp6("../results/exp6_qemu_single_vm.dat")
+    if 'exp7' in args.file:
+        plot_exp7("../results/exp7-qemu_two_vm_page_shared_in_time.mesures.t480", "../results/exp7-qemu_two_vm_page_shared_in_time.mesures.r3700")
+    if 'exp8' in args.file:
+        plot_exp8("../results/exp8-qemu_EFI_two_empty_vm_page_shared_in_time.measure.r3700", "../results/exp8-qemu_BIOS_two_empty_vm_page_shared_in_time.measure.r3700")
+    if 'exp9' in args.file:
+        plot_exp9("../results/exp9-qemu_two_VM_stress_exp9.2.r3700")
     # distribution(res[2], 2)
     exit(EX_OK)
 
