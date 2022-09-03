@@ -50,21 +50,21 @@ One VMM lauch two or three VMs
 
 ### READ
 
-[Read access cache/no cache](pics/exp1-read-own.png)
+![Read access cache/no cache](pics/exp1-read-own.png)
 
 ### WRITE (Copy-On-Write)
 
-[Write access](pics/exp4-write-own_and_shared_(COW).png)
+![Write access](pics/exp4-write-own_and_shared_(COW).png)
 
 ### RDTSC three VMs
 
-[Qemu rdtsc](pics/02-vm_counter_point_of_view_qemu_high_activitiy.png)
+![Qemu rdtsc](pics/02-vm_counter_point_of_view_qemu_high_activitiy.png)
 
 
 ### Shared pages
 
-[Qemu BIOS/UEFI](pics/exp8-qemu_BIOS_EFI_shared_pages.png)
-[Qemu Alpine](pics/exp7-twoVM_shared_page_in_time.png)
+![Qemu BIOS/UEFI](pics/exp8-qemu_BIOS_EFI_shared_pages.png)
+![Qemu Alpine](pics/exp7-twoVM_shared_page_in_time.png)
 
 
 (sources : Memory Deduplication, Cache-based Side-Channel Attacks, une menace réelle
